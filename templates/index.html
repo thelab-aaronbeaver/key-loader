@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rotary Table Control</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .panel {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 450px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .status-item {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .status-item h3 {
+            margin: 0 0 10px 0;
+            color: #555;
+        }
+
+        .status-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .status-value.homed-no {
+            color: #dc3545;
+        }
+
+        .status-value.homed-yes {
+            color: #28a745;
+        }
+
+        .indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #ced4da;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 10px;
+        }
+
+        .indicator.active {
+            background-color: #28a745;
+        }
+
+        #system-message {
+            background-color: #343a40;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            min-height: 40px;
+            text-align: center;
+            font-family: monospace;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex-grow: 1;
+            padding: 15px;
+            font-size: 1.2em;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+        }
+
+        #home-button {
+            background-color: #ffc107;
+            color: black;
+        }
+
+        #start-button {
+            background-color: #007bff;
+        }
+
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="panel">
+        <h1>Rotary Table Control</h1>
+        <div class="status-grid">
+            <div class="status-item">
+                <h3>Angle</h3>
+                <span id="current-angle" class="status-value">0°</span>
+            </div>
+            <div class="status-item">
+                <h3>Status</h3>
+                <span id="homed-status" class="status-value homed-no">Not Homed</span>
+            </div>
+            <div class="status-item">
+                <h3>Sensors</h3>
+                <div>Hall: <span id="hall-status" class="indicator"></span></div>
+                <div style="margin-top: 10px;">Key: <span id="inductive-status" class="indicator"></span></div>
+            </div>
+        </div>
+        <h3>System Log</h3>
+        <div id="system-message">Machine needs to be homed.</div>
+        <div class="button-group">
+            <button id="home-button">Home Machine</button>
+            <button id="start-button">Start Cycle</button>
+        </div>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
