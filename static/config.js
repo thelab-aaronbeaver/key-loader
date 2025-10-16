@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnFwd = document.getElementById('btn-move-fwd');
     const btnBwd = document.getElementById('btn-move-bwd');
     const inputDeg = document.getElementById('degrees');
+    const btnSetZero = document.getElementById('btn-set-zero');
     const msg = document.getElementById('msg');
     const hall = document.getElementById('hall');
     const inductive = document.getElementById('inductive');
@@ -61,6 +62,19 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const data = await postJSON('/api/rotary/move', { degrees: -deg });
             msg.textContent = data.message || 'Moved';
+        } catch (e) {
+            msg.textContent = 'Error: ' + e.message;
+        } finally {
+            setBusy(false);
+        }
+    });
+
+    btnSetZero.addEventListener('click', async () => {
+        msg.textContent = 'Setting current position as zero...';
+        setBusy(true);
+        try {
+            const data = await postJSON('/api/rotary/set_zero');
+            msg.textContent = data.message || 'Zero set';
         } catch (e) {
             msg.textContent = 'Error: ' + e.message;
         } finally {

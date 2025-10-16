@@ -136,11 +136,31 @@ def api_rotary_move():
     ok = hw.move_degrees(degrees)
     if ok:
         app_state["current_angle"] = (app_state["current_angle"] + degrees) % 360
-        app_state["system_message"] = f"Moved {degrees}°"
+        # Verification: if we expect to be at 0° (within numeric wrap), hall should be active
+        at_zero = abs(app_state["current_angle"]) < 1e-6 or abs(app_state["current_angle"] - 360) < 1e-6
+        if at_zero:
+            if not hw.read_hall_sensor():
+                ok = False
+                app_state["system_message"] = "ERROR: Expected hall at 0°, but not detected."
+            else:
+                app_state["system_message"] = f"Moved {degrees}° (hall verified)"
+        else:
+            app_state["system_message"] = f"Moved {degrees}°"
     else:
         app_state["system_message"] = "Move failed"
     app_state["is_running"] = False
     return jsonify({"success": ok, "message": app_state["system_message"], "current_angle": app_state["current_angle"]})
+
+# --- ADDED: Set current position as zero ---
+@app.route('/api/rotary/set_zero', methods=['POST'])
+def api_rotary_set_zero():
+    if app_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+    # Trust the operator: set current as absolute zero
+    app_state["current_angle"] = 0
+    app_state["is_homed"] = True
+    app_state["system_message"] = "Current position set as 0°."
+    return jsonify({"success": True, "message": app_state["system_message"], "current_angle": app_state["current_angle"]})
 
 
 if __name__ == '__main__':
