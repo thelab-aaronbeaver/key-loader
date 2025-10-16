@@ -20,6 +20,10 @@ class HardwareController:
         self.SLIDER_MIN_PIN = 13
         self.SLIDER_MAX_PIN = 12
 
+        # --- ADDED: Slider motor control pins (step/dir) ---
+        self.SLIDER_STEP_PIN = 23
+        self.SLIDER_DIR_PIN = 24
+
         # --- MODIFIED: Motor Configuration for MKS SERVO42C (NEMA 17) ---
         # A common setting for this driver is 16x microstepping on a 1.8° motor.
         # 200 full steps * 16 microsteps = 3200 pulses per revolution.
@@ -42,6 +46,10 @@ class HardwareController:
         # --- ADDED: Setup slider switches ---
         GPIO.setup(self.SLIDER_MIN_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.SLIDER_MAX_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+        # --- ADDED: Setup slider motor control pins ---
+        GPIO.setup(self.SLIDER_STEP_PIN, GPIO.OUT)
+        GPIO.setup(self.SLIDER_DIR_PIN, GPIO.OUT)
         
         print("✅ Hardware Controller Initialized with Limit Switches")
 
@@ -103,6 +111,31 @@ class HardwareController:
 
     def read_slider_max(self):
         return GPIO.input(self.SLIDER_MAX_PIN) == GPIO.LOW
+
+    # --- ADDED: Slider movement helpers ---
+    def slider_move_to_max(self, speed_delay: float, max_pulses: int = 20000) -> bool:
+        """Drive slider outward until MAX switch triggers or max_pulses reached."""
+        GPIO.output(self.SLIDER_DIR_PIN, GPIO.HIGH)
+        for _ in range(max_pulses):
+            if self.read_slider_max():
+                return True
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
+            time.sleep(speed_delay)
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
+            time.sleep(speed_delay)
+        return False
+
+    def slider_move_to_min(self, speed_delay: float, max_pulses: int = 20000) -> bool:
+        """Drive slider inward until MIN switch triggers or max_pulses reached."""
+        GPIO.output(self.SLIDER_DIR_PIN, GPIO.LOW)
+        for _ in range(max_pulses):
+            if self.read_slider_min():
+                return True
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
+            time.sleep(speed_delay)
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
+            time.sleep(speed_delay)
+        return False
 
     def cleanup(self):
         GPIO.cleanup()

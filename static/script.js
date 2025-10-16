@@ -15,9 +15,15 @@ document.addEventListener('DOMContentLoaded', function () {
         fetch('/api/home', { method: 'POST' });
     });
 
-    startButton.addEventListener('click', () => {
+    startButton.addEventListener('click', async () => {
         messageDisplay.textContent = 'Starting cycle...';
-        fetch('/api/start', { method: 'POST' });
+        const cyclesInput = document.getElementById('cycles');
+        const cycles = cyclesInput ? parseInt(cyclesInput.value, 10) || 1 : 1;
+        try {
+            await fetch('/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cycles }) });
+        } catch (e) {
+            // no-op; errors reflected via /api/status polling
+        }
     });
 
     function updateStatus() {
