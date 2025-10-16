@@ -29,9 +29,12 @@ def load_config():
     """Load configuration from JSON file, create default if not exists."""
     default_config = {
         "step_degrees": 36.0,
-        "dwell_ms": 1000,           # time to hold at position (ms)
-        "slider_in_delay": 0.0008,  # smaller = faster
-        "slider_out_delay": 0.0008,
+        "pause_seconds": 1.0,       # time to hold at position (seconds)
+        "slider_in_speed": 50,      # 0-100 speed scale (0=stopped, 100=fastest)
+        "slider_out_speed": 50,     # 0-100 speed scale (0=stopped, 100=fastest)
+        "rotary_speed": 50,         # 0-100 speed scale for rotary motor
+        "rotary_accel_steps": 100,  # steps for acceleration ramp-up
+        "rotary_decel_steps": 100,  # steps for deceleration ramp-down
         "cycles": 10                # default cycle count
     }
     
@@ -62,6 +65,21 @@ def save_config(config_dict):
 # Load initial config
 config = load_config()
 
+def speed_to_delay(speed):
+    """Convert 0-100 speed to delay in seconds. 0=stopped, 100=fastest."""
+    if speed <= 0:
+        return 1.0  # Very slow if stopped
+    # Convert to delay: 100 = 0.0001s, 1 = 0.01s (inverse relationship)
+    return max(0.0001, 0.01 / (speed / 100.0))
+
+def send_pico_command(command):
+    """Send command to Raspberry Pico. TODO: Implement actual communication."""
+    # Placeholder for Pico communication
+    # This could be serial, USB, I2C, or other communication method
+    print(f"📡 Sending to Pico: {command}")
+    # TODO: Implement actual Pico communication here
+    # Example: ser.write(f"{command}\n".encode()) for serial communication
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -82,12 +100,18 @@ def api_set_config():
     try:
         if 'step_degrees' in data:
             config['step_degrees'] = float(data['step_degrees'])
-        if 'dwell_ms' in data:
-            config['dwell_ms'] = int(data['dwell_ms'])
-        if 'slider_in_delay' in data:
-            config['slider_in_delay'] = float(data['slider_in_delay'])
-        if 'slider_out_delay' in data:
-            config['slider_out_delay'] = float(data['slider_out_delay'])
+        if 'pause_seconds' in data:
+            config['pause_seconds'] = float(data['pause_seconds'])
+        if 'slider_in_speed' in data:
+            config['slider_in_speed'] = max(0, min(100, int(data['slider_in_speed'])))  # clamp 0-100
+        if 'slider_out_speed' in data:
+            config['slider_out_speed'] = max(0, min(100, int(data['slider_out_speed'])))  # clamp 0-100
+        if 'rotary_speed' in data:
+            config['rotary_speed'] = max(0, min(100, int(data['rotary_speed'])))  # clamp 0-100
+        if 'rotary_accel_steps' in data:
+            config['rotary_accel_steps'] = max(1, int(data['rotary_accel_steps']))  # minimum 1 step
+        if 'rotary_decel_steps' in data:
+            config['rotary_decel_steps'] = max(1, int(data['rotary_decel_steps']))  # minimum 1 step
         if 'cycles' in data:
             config['cycles'] = int(data['cycles'])
         
@@ -142,7 +166,12 @@ def start_cycle():
         target_angle = (i * config['step_degrees']) % 360
         app_state["system_message"] = f"Moving to position {i} ({target_angle}°)..."
         
-        move_success = hw.move_degrees(config['step_degrees'])
+        move_success = hw.move_degrees(
+            config['step_degrees'], 
+            speed=config['rotary_speed'],
+            accel_steps=config['rotary_accel_steps'],
+            decel_steps=config['rotary_decel_steps']
+        )
         if not move_success:
             app_state["system_message"] = "ERROR: Motor stalled during movement!"
             break 
@@ -157,15 +186,37 @@ def start_cycle():
 
         if hw.read_inductive_sensor():
             app_state["system_message"] = f"✅ Key detected at {target_angle}°. Triggering."
-            # TODO: Send command to Pico (inner command)
-            # Slider OUT to end, then return IN, with configured speeds
-            out_ok = hw.slider_move_to_max(config['slider_out_delay'])
-            in_ok = hw.slider_move_to_min(config['slider_in_delay']) if out_ok else False
-            # Dwell at position
-            time.sleep(max(config['dwell_ms'], 0) / 1000.0)
-            if not (out_ok and in_ok):
-                app_state["system_message"] = "ERROR: Slider movement failed (limit not reached)."
+            
+            # Send command to Pico to start poles timer
+            # TODO: Implement actual Pico communication (serial/USB)
+            send_pico_command("trigger_function")
+            
+            # Start slider movement sequence: IN → OUT
+            out_delay = speed_to_delay(config['slider_out_speed'])
+            in_delay = speed_to_delay(config['slider_in_speed'])
+            
+            # Move slider to IN limit switch first
+            app_state["system_message"] = f"Key detected. Moving slider to IN position..."
+            in_ok = hw.slider_move_to_min(in_delay)
+            
+            if not in_ok:
+                app_state["system_message"] = "ERROR: Slider failed to reach IN limit switch."
                 break
+            
+            # Move slider to OUT limit switch
+            app_state["system_message"] = f"Slider at IN. Moving to OUT position..."
+            out_ok = hw.slider_move_to_max(out_delay)
+            
+            if not out_ok:
+                app_state["system_message"] = "ERROR: Slider failed to reach OUT limit switch."
+                break
+            
+            # Wait for pause timer to complete
+            pause_time = max(config['pause_seconds'], 0)
+            app_state["system_message"] = f"Slider at OUT. Waiting {pause_time:.1f}s for poles timer..."
+            time.sleep(pause_time)
+            
+            app_state["system_message"] = f"Poles timer complete. Ready for next position."
         else:
             app_state["system_message"] = f"No key at {target_angle}°. Moving on."
 
@@ -214,7 +265,12 @@ def api_rotary_move():
         return jsonify({"success": False, "message": "Invalid degrees"}), 400
     app_state["is_running"] = True
     app_state["system_message"] = f"Moving {degrees}°..."
-    ok = hw.move_degrees(degrees)
+    ok = hw.move_degrees(
+        degrees,
+        speed=config['rotary_speed'],
+        accel_steps=config['rotary_accel_steps'],
+        decel_steps=config['rotary_decel_steps']
+    )
     if ok:
         app_state["current_angle"] = (app_state["current_angle"] + degrees) % 360
         # Verification: if we expect to be at 0° (within numeric wrap), hall should be active

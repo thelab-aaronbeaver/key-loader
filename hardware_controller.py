@@ -76,8 +76,8 @@ class HardwareController:
         print("🛑 ERROR: Homing failed! Hall not detected within expected travel.")
         return False
 
-    def move_degrees(self, degrees):
-        """Move the rotary motor by the given degrees (signed). Positive=CW, Negative=CCW."""
+    def move_degrees(self, degrees, speed=50, accel_steps=100, decel_steps=100):
+        """Move the rotary motor by the given degrees with acceleration/deceleration."""
         steps_to_move = int((abs(degrees) / 360.0) * self.PULSES_PER_REV)
 
         # Direction based on sign
@@ -86,18 +86,59 @@ class HardwareController:
         else:
             GPIO.output(self.DIR_PIN, GPIO.LOW)
 
-        print(f"Moving {steps_to_move} steps ({'CW' if degrees >= 0 else 'CCW'})...")
-        for _ in range(steps_to_move):
+        # Convert speed (0-100) to delay
+        base_delay = self._speed_to_delay(speed)
+        
+        print(f"Moving {steps_to_move} steps ({'CW' if degrees >= 0 else 'CCW'}) at speed {speed}...")
+        
+        # Calculate acceleration/deceleration phases
+        accel_phase = min(accel_steps, steps_to_move // 2)
+        decel_phase = min(decel_steps, steps_to_move // 2)
+        cruise_phase = steps_to_move - accel_phase - decel_phase
+        
+        # Acceleration phase
+        for i in range(accel_phase):
             if GPIO.input(self.ALM_PIN) == GPIO.LOW:
                 print("🛑 ERROR: Motor Stalled!")
                 return False
-
-            GPIO.output(self.STEP_PIN, GPIO.HIGH)
-            time.sleep(self.SPEED_DELAY)
-            GPIO.output(self.STEP_PIN, GPIO.LOW)
-            time.sleep(self.SPEED_DELAY)
+            
+            # Gradually decrease delay (increase speed)
+            delay = base_delay * (1.0 + (accel_phase - i) / accel_phase)
+            self._step_motor(delay)
+        
+        # Cruise phase
+        for _ in range(cruise_phase):
+            if GPIO.input(self.ALM_PIN) == GPIO.LOW:
+                print("🛑 ERROR: Motor Stalled!")
+                return False
+            
+            self._step_motor(base_delay)
+        
+        # Deceleration phase
+        for i in range(decel_phase):
+            if GPIO.input(self.ALM_PIN) == GPIO.LOW:
+                print("🛑 ERROR: Motor Stalled!")
+                return False
+            
+            # Gradually increase delay (decrease speed)
+            delay = base_delay * (1.0 + (i + 1) / decel_phase)
+            self._step_motor(delay)
         
         return True
+    
+    def _speed_to_delay(self, speed):
+        """Convert 0-100 speed to delay in seconds."""
+        if speed <= 0:
+            return 0.01  # Very slow if stopped
+        # Convert to delay: 100 = 0.0005s, 1 = 0.01s (inverse relationship)
+        return max(0.0005, 0.01 / (speed / 100.0))
+    
+    def _step_motor(self, delay):
+        """Single step with given delay."""
+        GPIO.output(self.STEP_PIN, GPIO.HIGH)
+        time.sleep(delay)
+        GPIO.output(self.STEP_PIN, GPIO.LOW)
+        time.sleep(delay)
 
     def read_hall_sensor(self):
         return GPIO.input(self.HALL_PIN) == GPIO.LOW

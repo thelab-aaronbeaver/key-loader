@@ -7,9 +7,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const msg = document.getElementById('msg');
     // Config inputs
     const inpStepDeg = document.getElementById('step_degrees');
-    const inpDwell = document.getElementById('dwell_ms');
-    const inpInDelay = document.getElementById('slider_in_delay');
-    const inpOutDelay = document.getElementById('slider_out_delay');
+    const inpPause = document.getElementById('pause_seconds');
+    const inpRotarySpeed = document.getElementById('rotary_speed');
+    const inpRotaryAccel = document.getElementById('rotary_accel_steps');
+    const inpRotaryDecel = document.getElementById('rotary_decel_steps');
+    const inpInSpeed = document.getElementById('slider_in_speed');
+    const inpOutSpeed = document.getElementById('slider_out_speed');
     const btnSaveCfg = document.getElementById('btn-save-config');
     const hall = document.getElementById('hall');
     const inductive = document.getElementById('inductive');
@@ -107,9 +110,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/config');
             const cfg = await res.json();
             inpStepDeg.value = cfg.step_degrees;
-            inpDwell.value = cfg.dwell_ms;
-            inpInDelay.value = cfg.slider_in_delay;
-            inpOutDelay.value = cfg.slider_out_delay;
+            inpPause.value = cfg.pause_seconds;
+            inpRotarySpeed.value = cfg.rotary_speed;
+            inpRotaryAccel.value = cfg.rotary_accel_steps;
+            inpRotaryDecel.value = cfg.rotary_decel_steps;
+            inpInSpeed.value = cfg.slider_in_speed;
+            inpOutSpeed.value = cfg.slider_out_speed;
         } catch (e) {
             msg.textContent = 'Load config error: ' + e.message;
         }
@@ -123,9 +129,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     step_degrees: parseFloat(inpStepDeg.value),
-                    dwell_ms: parseInt(inpDwell.value, 10),
-                    slider_in_delay: parseFloat(inpInDelay.value),
-                    slider_out_delay: parseFloat(inpOutDelay.value)
+                    pause_seconds: parseFloat(inpPause.value),
+                    rotary_speed: parseInt(inpRotarySpeed.value, 10),
+                    rotary_accel_steps: parseInt(inpRotaryAccel.value, 10),
+                    rotary_decel_steps: parseInt(inpRotaryDecel.value, 10),
+                    slider_in_speed: parseInt(inpInSpeed.value, 10),
+                    slider_out_speed: parseInt(inpOutSpeed.value, 10)
                 })
             });
             const data = await res.json();

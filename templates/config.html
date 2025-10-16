@@ -31,14 +31,24 @@
             <div class="row">
                 <label for="step_degrees">Step Degrees</label>
                 <input id="step_degrees" type="number" step="1" value="36">
-                <label for="dwell_ms">Dwell (ms)</label>
-                <input id="dwell_ms" type="number" step="50" value="1000">
+                <label for="pause_seconds">Pause (seconds)</label>
+                <input id="pause_seconds" type="number" step="0.1" value="1.0">
             </div>
             <div class="row">
-                <label for="slider_in_delay">Slider In Speed (delay s)</label>
-                <input id="slider_in_delay" type="number" step="0.0001" value="0.0008">
-                <label for="slider_out_delay">Slider Out Speed (delay s)</label>
-                <input id="slider_out_delay" type="number" step="0.0001" value="0.0008">
+                <label for="rotary_speed">Rotary Speed (0-100)</label>
+                <input id="rotary_speed" type="number" min="0" max="100" step="1" value="50">
+                <label for="rotary_accel_steps">Accel Steps</label>
+                <input id="rotary_accel_steps" type="number" min="1" step="1" value="100">
+            </div>
+            <div class="row">
+                <label for="rotary_decel_steps">Decel Steps</label>
+                <input id="rotary_decel_steps" type="number" min="1" step="1" value="100">
+                <label for="slider_in_speed">Slider In Speed (0-100)</label>
+                <input id="slider_in_speed" type="number" min="0" max="100" step="1" value="50">
+            </div>
+            <div class="row">
+                <label for="slider_out_speed">Slider Out Speed (0-100)</label>
+                <input id="slider_out_speed" type="number" min="0" max="100" step="1" value="50">
                 <button id="btn-save-config" class="btn-move">Save</button>
             </div>
         </div>
