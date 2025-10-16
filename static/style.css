@@ -1,0 +1,36 @@
+/* Shared base */
+body { font-family: sans-serif; background-color: #f0f2f5; margin: 0; }
+
+/* Index page layout */
+body.centered { display: flex; justify-content: center; align-items: center; height: 100vh; }
+.panel { background-color: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 450px; }
+h1 { text-align: center; color: #333; }
+.status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin: 20px 0; }
+.status-item { background-color: #e9ecef; padding: 15px; border-radius: 5px; text-align: center; }
+.status-item h3 { margin: 0 0 10px 0; color: #555; }
+.status-value { font-size: 1.5em; font-weight: bold; }
+.status-value.homed-no { color: #dc3545; }
+.status-value.homed-yes { color: #28a745; }
+.indicator { width: 20px; height: 20px; border-radius: 50%; background-color: #ced4da; display: inline-block; vertical-align: middle; margin-left: 10px; }
+.indicator.active { background-color: #28a745; }
+#system-message { background-color: #343a40; color: #fff; padding: 15px; border-radius: 5px; min-height: 40px; text-align: center; font-family: monospace; }
+.button-group { display: flex; gap: 10px; margin-top: 20px; }
+button { flex-grow: 1; padding: 15px; font-size: 1.2em; border: none; border-radius: 5px; color: white; cursor: pointer; }
+#home-button { background-color: #ffc107; color: black; }
+#start-button { background-color: #007bff; }
+button:disabled { background-color: #6c757d; cursor: not-allowed; }
+.nav-inline { text-align: center; margin-bottom: 10px; }
+.spacer-top { margin-top: 10px; }
+
+/* Config page */
+.container { max-width: 800px; margin: 0 auto; padding: 20px; }
+.card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+.row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+label { min-width: 180px; }
+input[type="number"] { width: 120px; padding: 8px; }
+button.btn-home { background: #ffc107; color: #000; }
+button.btn-move { background: #007bff; }
+button.btn-back { background: #6c757d; }
+#msg { background:#343a40; color:#fff; padding:10px; border-radius:6px; min-height:28px; font-family: monospace; }
+a { color:#007bff; text-decoration:none; }
+

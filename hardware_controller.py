@@ -11,9 +11,14 @@ class HardwareController:
         self.ALM_PIN = 16
         self.HALL_PIN = 26
         self.INDUCTIVE_PIN = 19
-        # --- ADDED: Limit Switch Pins ---
-        self.HOME_SWITCH_PIN = 5  # The switch for the 0° position
-        self.END_SWITCH_PIN = 6   # A second switch, if needed
+        # --- ADDED: Legacy rotary limit switch pins (optional) ---
+        self.HOME_SWITCH_PIN = 5  # Optional legacy home switch (not required if using hall)
+        self.END_SWITCH_PIN = 6   # Optional second switch
+
+        # --- ADDED: Slider motor limit switches ---
+        # NOTE: Adjust these BCM pins to match wiring for the slider rail.
+        self.SLIDER_MIN_PIN = 13
+        self.SLIDER_MAX_PIN = 12
 
         # --- MODIFIED: Motor Configuration for MKS SERVO42C (NEMA 17) ---
         # A common setting for this driver is 16x microstepping on a 1.8° motor.
@@ -33,41 +38,47 @@ class HardwareController:
         # --- ADDED: Setup limit switch pins ---
         GPIO.setup(self.HOME_SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.END_SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+        # --- ADDED: Setup slider switches ---
+        GPIO.setup(self.SLIDER_MIN_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(self.SLIDER_MAX_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         
         print("✅ Hardware Controller Initialized with Limit Switches")
 
-    # --- ADDED: Homing Method ---
+    # --- MODIFIED: Homing Method (use hall sensor for home detection) ---
     def home_table(self):
-        """Rotates the table until the home limit switch is triggered."""
-        print("Homing sequence started...")
+        """Rotate the rotary motor until the hall sensor detects the magnet (home)."""
+        print("Homing sequence (hall) started...")
         # Set direction for homing (e.g., counter-clockwise)
         GPIO.output(self.DIR_PIN, GPIO.LOW)
-        
-        # Rotate until the switch is hit (pin goes LOW)
-        # We'll rotate for a max of 1.1 revolutions to avoid infinite loops
-        max_steps = int(self.PULSES_PER_REV * 1.1)
+
+        # Rotate until hall is triggered (active low). Limit to ~1.5 revs to avoid loops
+        max_steps = int(self.PULSES_PER_REV * 1.5)
         for _ in range(max_steps):
-            if GPIO.input(self.HOME_SWITCH_PIN) == GPIO.LOW:
-                print("✅ Home switch triggered. Homing complete.")
-                return True # Success
-            
-            # Pulse the motor one step
+            if self.read_hall_sensor():
+                # Optional: back off a bit and re-approach slowly for better accuracy
+                print("✅ Hall detected. Homing complete.")
+                return True
+
             GPIO.output(self.STEP_PIN, GPIO.HIGH)
             time.sleep(self.SPEED_DELAY)
             GPIO.output(self.STEP_PIN, GPIO.LOW)
             time.sleep(self.SPEED_DELAY)
-            
-        print("🛑 ERROR: Homing failed! Table rotated fully without hitting home switch.")
-        return False # Failure
+
+        print("🛑 ERROR: Homing failed! Hall not detected within expected travel.")
+        return False
 
     def move_degrees(self, degrees):
-        """Moves the motor a specified number of degrees and checks for errors."""
-        steps_to_move = int((degrees / 360.0) * self.PULSES_PER_REV)
-        
-        # Set direction for normal cycle (e.g., clockwise)
-        GPIO.output(self.DIR_PIN, GPIO.HIGH)
-        
-        print(f"Moving {steps_to_move} steps...")
+        """Move the rotary motor by the given degrees (signed). Positive=CW, Negative=CCW."""
+        steps_to_move = int((abs(degrees) / 360.0) * self.PULSES_PER_REV)
+
+        # Direction based on sign
+        if degrees >= 0:
+            GPIO.output(self.DIR_PIN, GPIO.HIGH)
+        else:
+            GPIO.output(self.DIR_PIN, GPIO.LOW)
+
+        print(f"Moving {steps_to_move} steps ({'CW' if degrees >= 0 else 'CCW'})...")
         for _ in range(steps_to_move):
             if GPIO.input(self.ALM_PIN) == GPIO.LOW:
                 print("🛑 ERROR: Motor Stalled!")
@@ -85,6 +96,13 @@ class HardwareController:
 
     def read_inductive_sensor(self):
         return GPIO.input(self.INDUCTIVE_PIN) == GPIO.LOW
+
+    # --- ADDED: Slider limit switch reads ---
+    def read_slider_min(self):
+        return GPIO.input(self.SLIDER_MIN_PIN) == GPIO.LOW
+
+    def read_slider_max(self):
+        return GPIO.input(self.SLIDER_MAX_PIN) == GPIO.LOW
 
     def cleanup(self):
         GPIO.cleanup()

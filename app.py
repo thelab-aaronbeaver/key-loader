@@ -1,6 +1,6 @@
 # In file: app.py
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 from hardware_controller import HardwareController
 import time
 
@@ -14,12 +14,20 @@ app_state = {
     "is_homed": False, # Added homing status
     "system_message": "Machine needs to be homed.",
     "hall_status": False,
-    "inductive_status": False
+    "inductive_status": False,
+    # --- ADDED: Slider limit switch states ---
+    "slider_min": False,
+    "slider_max": False
 }
 
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# --- ADDED: Configuration Page ---
+@app.route('/config')
+def config_page():
+    return render_template('config.html')
 
 # --- ADDED: Homing Route ---
 @app.route('/api/home', methods=['POST'])
@@ -90,7 +98,49 @@ def start_cycle():
 def get_status():
     app_state["hall_status"] = hw.read_hall_sensor()
     app_state["inductive_status"] = hw.read_inductive_sensor()
+    # --- ADDED: slider switches ---
+    try:
+        app_state["slider_min"] = hw.read_slider_min()
+        app_state["slider_max"] = hw.read_slider_max()
+    except AttributeError:
+        # Backward compatibility if methods not present
+        app_state["slider_min"] = False
+        app_state["slider_max"] = False
     return jsonify(app_state)
+
+# --- ADDED: Rotary controls for config page ---
+@app.route('/api/rotary/home', methods=['POST'])
+def api_rotary_home():
+    if app_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+    app_state["is_running"] = True
+    app_state["system_message"] = "Rotary homing..."
+    ok = hw.home_table()
+    app_state["is_homed"] = bool(ok)
+    app_state["current_angle"] = 0 if ok else app_state["current_angle"]
+    app_state["system_message"] = "Rotary homed" if ok else "Rotary homing failed"
+    app_state["is_running"] = False
+    return jsonify({"success": ok, "message": app_state["system_message"]})
+
+@app.route('/api/rotary/move', methods=['POST'])
+def api_rotary_move():
+    if app_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+    data = request.get_json(silent=True) or {}
+    try:
+        degrees = float(data.get("degrees", 0))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "Invalid degrees"}), 400
+    app_state["is_running"] = True
+    app_state["system_message"] = f"Moving {degrees}°..."
+    ok = hw.move_degrees(degrees)
+    if ok:
+        app_state["current_angle"] = (app_state["current_angle"] + degrees) % 360
+        app_state["system_message"] = f"Moved {degrees}°"
+    else:
+        app_state["system_message"] = "Move failed"
+    app_state["is_running"] = False
+    return jsonify({"success": ok, "message": app_state["system_message"], "current_angle": app_state["current_angle"]})
 
 
 if __name__ == '__main__':
