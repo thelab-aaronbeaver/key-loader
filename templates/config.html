@@ -16,22 +16,23 @@
         <div class="card">
             <h2>Rotary Motor</h2>
             <div class="row">
-                <button id="btn-home" class="btn-home">Home (Hall)</button>
+                <button id="btn-home" class="btn-home">1. Move Home</button>
+                <button id="btn-set-zero" class="btn-back">2. Set Zero</button>
                 <label for="degrees">Move Degrees</label>
                 <input id="degrees" type="number" step="1" value="36">
                 <button id="btn-move-fwd" class="btn-move">Move +</button>
                 <button id="btn-move-bwd" class="btn-back">Move -</button>
-                <button id="btn-set-zero" class="btn-back">Set Zero Here</button>
+                
             </div>
         </div>
 
         <div class="card">
             <h2>Sensors</h2>
             <div class="row">
-                <div>Hall <span id="hall" class="indicator"></span></div>
+                <div>Home Switch <span id="hall" class="indicator"></span></div>
                 <div>Key <span id="inductive" class="indicator"></span></div>
-                <div>Slider MIN <span id="smin" class="indicator"></span></div>
-                <div>Slider MAX <span id="smax" class="indicator"></span></div>
+                <div>Slider IN <span id="smin" class="indicator"></span></div>
+                <div>Slider OUT <span id="smax" class="indicator"></span></div>
             </div>
         </div>
 
