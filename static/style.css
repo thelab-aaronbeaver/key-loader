@@ -1,13 +1,14 @@
 :root {
-    --bg-color: #22272e;
-    --panel-color: #2d333b;
+    --bg-color: #1f3535;
+    --panel-color: #fbfbf4;
     --border-color: #444c56;
     --text-color: #c5c8c6;
     --text-accent-color: #ffffff;
-    --primary-color: #388bfd;
+    --button-color: #388bfd;
     --success-color: #28a745;
     --warning-color: #d29922;
     --danger-color: #da3633;
+    --primary-color: #cace00;
 }
 
 /* Shared base */
@@ -29,7 +30,6 @@ body.centered {
     background-color: var(--panel-color);
     padding: 30px;
     border-radius: 10px;
-    box-shadow: 0 4px 8px var(--border-color);
     width: 450px;
 }
 
@@ -102,17 +102,23 @@ h1 {
 
 button {
     flex-grow: 1;
-    padding: 15px;
+    padding: 6px;
     font-size: 1.2em;
     border: none;
     border-radius: 5px;
-    color: white;
+    color: var(--text-accent-color);
     cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 #home-button {
-    background-color: var(--warning-color);
-    color: black;
+    background-color: var(--button-color);
+    color: var(--text-accent-color);
 }
 
 #start-button {
@@ -163,19 +169,32 @@ label {
 input[type="number"] {
     width: 120px;
     padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--panel-color);
+    color: #333;
+    font-size: 14px;
+}
+
+input[type="number"]:focus {
+    outline: none;
+    border-color: var(--button-color);
+    box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.2);
 }
 
 button.btn-home {
-    background: var(--warning-color);
-    color: #000;
+    background: var(--button-color);
+    color: var(--text-accent-color);
 }
 
 button.btn-move {
-    background: var(--primary-color);
+    background: var(--button-color);
+    color: var(--text-accent-color);
 }
 
 button.btn-back {
     background: var(--border-color);
+    color: var(--text-accent-color);
 }
 
 #msg {
