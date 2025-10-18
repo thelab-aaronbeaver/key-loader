@@ -4,6 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnBwd = document.getElementById('btn-move-bwd');
     const inputDeg = document.getElementById('degrees');
     const btnSetZero = document.getElementById('btn-set-zero');
+    const btnSliderTest = document.getElementById('btn-slider-test');
+    const sliderStatus = document.getElementById('slider-status');
     const msg = document.getElementById('msg');
     // Config inputs
     const inpStepDeg = document.getElementById('step_degrees');
@@ -23,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnHome.disabled = b;
         btnFwd.disabled = b;
         btnBwd.disabled = b;
+        btnSliderTest.disabled = b;
     }
 
     async function postJSON(url, body) {
@@ -32,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
             body: body ? JSON.stringify(body) : undefined
         });
         let data = null;
-        try { data = await res.json(); } catch {}
+        try { data = await res.json(); } catch { }
         if (!res.ok) throw new Error((data && data.message) || res.statusText);
         return data || {};
     }
@@ -85,6 +88,30 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await postJSON('/api/rotary/set_zero');
             msg.textContent = data.message || 'Zero set';
         } catch (e) {
+            msg.textContent = 'Error: ' + e.message;
+        } finally {
+            setBusy(false);
+        }
+    });
+
+    btnSliderTest.addEventListener('click', async () => {
+        sliderStatus.textContent = 'Testing slider cycle...';
+        sliderStatus.className = 'status-text testing';
+        msg.textContent = 'Starting slider test cycle...';
+        setBusy(true);
+        try {
+            const data = await postJSON('/api/slider/test_cycle');
+            if (data.success) {
+                sliderStatus.textContent = 'Test Complete';
+                sliderStatus.className = 'status-text complete';
+            } else {
+                sliderStatus.textContent = 'Test Failed';
+                sliderStatus.className = 'status-text failed';
+            }
+            msg.textContent = data.message || 'Slider test completed';
+        } catch (e) {
+            sliderStatus.textContent = 'Test Error';
+            sliderStatus.className = 'status-text failed';
             msg.textContent = 'Error: ' + e.message;
         } finally {
             setBusy(false);
@@ -144,6 +171,9 @@ document.addEventListener('DOMContentLoaded', () => {
             msg.textContent = 'Save config error: ' + e.message;
         }
     });
+
+    // Initialize slider status
+    sliderStatus.className = 'status-text';
 
     refreshStatus();
     loadConfig();

@@ -113,7 +113,7 @@ button {
 
 button:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 #home-button {
@@ -209,4 +209,34 @@ button.btn-back {
 a {
     color: var(--primary-color);
     text-decoration: none;
+}
+
+/* Slider test specific styles */
+.status-text {
+    font-weight: bold;
+    color: var(--text-accent-color);
+    padding: 5px 10px;
+    border-radius: 4px;
+    background-color: var(--border-color);
+    min-width: 120px;
+    text-align: center;
+}
+
+.status-text.testing {
+    background-color: var(--warning-color);
+}
+
+.status-text.complete {
+    background-color: var(--success-color);
+}
+
+.status-text.failed {
+    background-color: var(--danger-color);
+}
+
+.info-text {
+    font-size: 0.9em;
+    color: var(--text-color);
+    font-style: italic;
+    margin-top: 5px;
 }

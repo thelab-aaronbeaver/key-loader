@@ -299,6 +299,53 @@ def api_rotary_set_zero():
     app_state["system_message"] = "Current position set as 0°."
     return jsonify({"success": True, "message": app_state["system_message"], "current_angle": app_state["current_angle"]})
 
+# --- ADDED: Slider test cycle ---
+@app.route('/api/slider/test_cycle', methods=['POST'])
+def api_slider_test_cycle():
+    if app_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+    
+    app_state["is_running"] = True
+    app_state["system_message"] = "Starting slider test cycle..."
+    
+    try:
+        # Get current slider speeds from config
+        in_delay = speed_to_delay(config['slider_in_speed'])
+        out_delay = speed_to_delay(config['slider_out_speed'])
+        
+        # Step 1: Move to MIN limit switch
+        app_state["system_message"] = "Moving slider to MIN position..."
+        min_success = hw.slider_move_to_min(in_delay)
+        
+        if not min_success:
+            app_state["system_message"] = "ERROR: Failed to reach MIN limit switch"
+            return jsonify({"success": False, "message": app_state["system_message"]})
+        
+        # Step 2: Move to MAX limit switch
+        app_state["system_message"] = "Moving slider to MAX position..."
+        max_success = hw.slider_move_to_max(out_delay)
+        
+        if not max_success:
+            app_state["system_message"] = "ERROR: Failed to reach MAX limit switch"
+            return jsonify({"success": False, "message": app_state["system_message"]})
+        
+        # Step 3: Return to MIN limit switch
+        app_state["system_message"] = "Returning slider to MIN position..."
+        return_success = hw.slider_move_to_min(in_delay)
+        
+        if not return_success:
+            app_state["system_message"] = "ERROR: Failed to return to MIN limit switch"
+            return jsonify({"success": False, "message": app_state["system_message"]})
+        
+        app_state["system_message"] = "Slider test cycle completed successfully"
+        return jsonify({"success": True, "message": app_state["system_message"]})
+        
+    except Exception as e:
+        app_state["system_message"] = f"Slider test error: {str(e)}"
+        return jsonify({"success": False, "message": app_state["system_message"]})
+    finally:
+        app_state["is_running"] = False
+
 
 if __name__ == '__main__':
     try:

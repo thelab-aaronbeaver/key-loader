@@ -31,17 +31,19 @@ This system automates the process of detecting keys on a rotating table and trig
 |-----------|----------|----------|
 | Rotary Step | 20 | Stepper motor step signal (PUL+) |
 | Rotary Dir | 21 | Stepper motor direction (DIR+) |
+| Rotary Enable | 22 | Motor enable/disable control (EN+) |
 | Rotary Alarm | 16 | Motor stall detection (ALM+) |
 | Hall Sensor | 26 | Home position detection |
 | Inductive Sensor | 19 | Key detection |
 | Slider Step | 23 | Slider motor step signal |
 | Slider Dir | 24 | Slider motor direction |
+| Slider Enable | 25 | Slider motor enable/disable control |
 | Slider IN | 13 | Slider inward limit switch |
 | Slider OUT | 12 | Slider outward limit switch |
 | Home Switch | 5 | Legacy home switch (optional) |
 | End Switch | 6 | Legacy end switch (optional) |
 
-**Note**: The OMC closed-loop stepper uses differential signals (PUL+/PUL-, DIR+/DIR-, ALM+/ALM-). Connect PUL+, DIR+, ALM+ to Raspberry Pi GPIO pins, and PUL-, DIR-, ALM- to Pi ground.
+**Note**: The OMC closed-loop stepper uses differential signals (PUL+/PUL-, DIR+/DIR-, EN+/EN-, ALM+/ALM-). Connect PUL+, DIR+, EN+, ALM+ to Raspberry Pi GPIO pins, and PUL-, DIR-, EN-, ALM- to Pi ground.
 
 ### Software Components
 
@@ -117,6 +119,7 @@ Settings are stored in `config.json` and can be modified via the web interface:
 
 ### Configuration Page (`/config`)
 - **Rotary Controls**: Home, set zero, manual movement
+- **Slider Motor Test**: Test slider cycle (MIN→MAX→MIN)
 - **Process Settings**: Step degrees, pause time, slider speeds
 - **Sensor Verification**: Live status of all sensors
 - **Save Configuration**: Persist settings to JSON file
@@ -134,6 +137,7 @@ Settings are stored in `config.json` and can be modified via the web interface:
 - `POST /api/rotary/home` - Home rotary motor (config page)
 - `POST /api/rotary/move` - Move rotary motor by degrees
 - `POST /api/rotary/set_zero` - Set current position as zero
+- `POST /api/slider/test_cycle` - Test slider motor cycle (MIN→MAX→MIN)
 
 ## Installation & Setup
 
@@ -165,6 +169,8 @@ python app.py
    - PUL- → Ground (Raspberry Pi)
    - DIR+ → GPIO 21 (Raspberry Pi)
    - DIR- → Ground (Raspberry Pi)
+   - EN+ → GPIO 22 (Raspberry Pi)
+   - EN- → Ground (Raspberry Pi)
    - ALM+ → GPIO 16 (Raspberry Pi)
    - ALM- → Ground (Raspberry Pi)
 3. **Motor Configuration**: Set microstepping via DIP switches (recommend 16x for smooth operation)
@@ -204,7 +210,9 @@ python app.py
 3. **Sensors Not Working**: Check wiring and pull-up resistors
 4. **Web Interface Unavailable**: Verify Flask server is running
 5. **Rotary Motor Issues**:
-   - Ensure differential signal wiring (PUL+/PUL-, DIR+/DIR-)
+   - Ensure differential signal wiring (PUL+/PUL-, DIR+/DIR-, EN+/EN-)
+   - Check enable pin wiring (EN+ to GPIO 22, EN- to ground)
+   - Verify motor is enabled before movement
    - Check microstepping DIP switch settings
    - Verify closed-loop controller is properly configured
    - Test with OMC configuration software
