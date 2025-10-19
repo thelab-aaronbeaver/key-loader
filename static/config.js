@@ -145,8 +145,8 @@ document.addEventListener('DOMContentLoaded', () => {
             inpRotaryDecel.value = cfg.rotary_decel_steps;
             inpInSpeed.value = cfg.slider_in_speed;
             inpOutSpeed.value = cfg.slider_out_speed;
-            inpSliderAccel.value = cfg.slider_accel_steps || 5;
-            inpSliderDecel.value = cfg.slider_decel_steps || 5;
+            inpSliderAccel.value = cfg.slider_accel_steps || 20;
+            inpSliderDecel.value = cfg.slider_decel_steps || 20;
         } catch (e) {
             msg.textContent = 'Load config error: ' + e.message;
         }

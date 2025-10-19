@@ -135,7 +135,7 @@ DROK 48V Supply Outputs:
 
 ### **TB6600 Driver (Slider Motor) Configuration:**
 - **Power**: 24V from DROK supply  
-- **Microstepping**: 2x (400 steps/revolution) - **CORRECTED**
+- **Microstepping**: 8x (1600 steps/revolution) - **UPDATED**
 - **Current**: Set for 1A motor (typically 0.8-1.0A)
 - **Enable Logic**: LOW = enabled, HIGH = disabled
 

@@ -241,12 +241,12 @@ class HardwareController:
         
         if ultra_fast:
             # ULTRA-FAST MODE: Minimal acceleration, maximum speed
-            accel_phase = min(2, max_pulses // 100)  # Only 2 steps acceleration
-            decel_phase = min(2, max_pulses // 100)  # Only 2 steps deceleration
+            accel_phase = min(10, max_pulses // 50)  # 10 steps acceleration for 1600 pulses/rev
+            decel_phase = min(10, max_pulses // 50)  # 10 steps deceleration for 1600 pulses/rev
         else:
-            # OPTIMIZED for TB6600 (400 pulses/rev) - use much smaller acceleration phases
-            accel_phase = min(accel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
-            decel_phase = min(decel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
+            # OPTIMIZED for TB6600 (1600 pulses/rev) - adjusted for higher pulse count
+            accel_phase = min(accel_steps, max_pulses // 10)  # Use 1/10 for 1600 pulses/rev
+            decel_phase = min(decel_steps, max_pulses // 10)  # Use 1/10 for 1600 pulses/rev
         
         cruise_phase = max(0, max_pulses - accel_phase - decel_phase)  # Ensure non-negative
         
@@ -313,12 +313,12 @@ class HardwareController:
         
         if ultra_fast:
             # ULTRA-FAST MODE: Minimal acceleration, maximum speed
-            accel_phase = min(2, max_pulses // 100)  # Only 2 steps acceleration
-            decel_phase = min(2, max_pulses // 100)  # Only 2 steps deceleration
+            accel_phase = min(10, max_pulses // 50)  # 10 steps acceleration for 1600 pulses/rev
+            decel_phase = min(10, max_pulses // 50)  # 10 steps deceleration for 1600 pulses/rev
         else:
-            # OPTIMIZED for TB6600 (400 pulses/rev) - use much smaller acceleration phases
-            accel_phase = min(accel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
-            decel_phase = min(decel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
+            # OPTIMIZED for TB6600 (1600 pulses/rev) - adjusted for higher pulse count
+            accel_phase = min(accel_steps, max_pulses // 10)  # Use 1/10 for 1600 pulses/rev
+            decel_phase = min(decel_steps, max_pulses // 10)  # Use 1/10 for 1600 pulses/rev
         
         cruise_phase = max(0, max_pulses - accel_phase - decel_phase)  # Ensure non-negative
         

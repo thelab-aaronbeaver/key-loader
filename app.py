@@ -32,8 +32,8 @@ def load_config():
         "pause_seconds": 1.0,       # time to hold at position (seconds)
         "slider_in_speed": 100,     # 0-100 speed scale (0=stopped, 100=fastest) - MAXIMUM SPEED
         "slider_out_speed": 100,    # 0-100 speed scale (0=stopped, 100=fastest) - MAXIMUM SPEED
-        "slider_accel_steps": 5,    # steps for slider acceleration ramp-up - OPTIMIZED for TB6600 (400 pulses/rev)
-        "slider_decel_steps": 5,    # steps for slider deceleration ramp-down - OPTIMIZED for TB6600 (400 pulses/rev)
+        "slider_accel_steps": 20,   # steps for slider acceleration ramp-up - OPTIMIZED for TB6600 (1600 pulses/rev)
+        "slider_decel_steps": 20,   # steps for slider deceleration ramp-down - OPTIMIZED for TB6600 (1600 pulses/rev)
         "rotary_speed": 100,        # 0-100 speed scale for rotary motor - MAXIMUM SPEED
         "rotary_accel_steps": 50,   # steps for acceleration ramp-up - reduced for faster acceleration
         "rotary_decel_steps": 50,   # steps for deceleration ramp-down - reduced for faster deceleration
