@@ -30,12 +30,12 @@ class HardwareController:
         self.SLIDER_MIN_PIN = 27
         self.SLIDER_MAX_PIN = 12
 
-        # --- MODIFIED: Motor Configuration for MKS SERVO42C (NEMA 17) ---
-        # A common setting for this driver is 16x microstepping on a 1.8° motor.
-        # 200 full steps * 16 microsteps = 3200 pulses per revolution.
-        # As always, verify this with your driver's DIP switch settings!
-        self.PULSES_PER_REV = 3200
-        self.SPEED_DELAY = 0.0005 # NEMA 17 may need a slightly slower speed
+        # --- MODIFIED: Motor Configuration for TB6600 Driver ---
+        # TB6600 is configured for 400 pulses per revolution (2x microstepping on 1.8° motor).
+        # 200 full steps * 2 microsteps = 400 pulses per revolution.
+        # This matches the TB6600 DIP switch settings for 2x microstepping.
+        self.PULSES_PER_REV = 400
+        self.SPEED_DELAY = 0.0002 # TB6600 can handle faster speeds than closed-loop drivers
 
         # --- Setup GPIO ---
         GPIO.setmode(GPIO.BCM)

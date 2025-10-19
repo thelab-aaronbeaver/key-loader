@@ -34,7 +34,7 @@ def load_config():
         "slider_out_speed": 80,     # 0-100 speed scale (0=stopped, 100=fastest) - increased for faster operation
         "slider_accel_steps": 30,   # steps for slider acceleration ramp-up
         "slider_decel_steps": 30,   # steps for slider deceleration ramp-down
-        "rotary_speed": 50,         # 0-100 speed scale for rotary motor
+        "rotary_speed": 80,         # 0-100 speed scale for rotary motor - increased for TB6600 driver
         "rotary_accel_steps": 100,  # steps for acceleration ramp-up
         "rotary_decel_steps": 100,  # steps for deceleration ramp-down
         "cycles": 10                # default cycle count
@@ -71,9 +71,9 @@ def speed_to_delay(speed):
     """Convert 0-100 speed to delay in seconds. 0=stopped, 100=fastest."""
     if speed <= 0:
         return 1.0  # Very slow if stopped
-    # Convert to delay: 100 = 0.00005s (50μs), 1 = 0.01s (inverse relationship)
-    # Reduced minimum delay for faster slider operation
-    return max(0.00005, 0.01 / (speed / 100.0))
+    # Convert to delay: 100 = 0.00002s (20μs), 1 = 0.01s (inverse relationship)
+    # Optimized for TB6600 driver - can handle faster speeds than closed-loop drivers
+    return max(0.00002, 0.01 / (speed / 100.0))
 
 def send_pico_command(command):
     #"""Send command to Raspberry Pico. TODO: Implement actual communication."""
