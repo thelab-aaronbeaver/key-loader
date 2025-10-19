@@ -76,7 +76,7 @@ def speed_to_delay(speed):
     return max(0.00005, 0.01 / (speed / 100.0))
 
 def send_pico_command(command):
-    """Send command to Raspberry Pico. TODO: Implement actual communication."""
+    #"""Send command to Raspberry Pico. TODO: Implement actual communication."""
     # Placeholder for Pico communication
     # This could be serial, USB, I2C, or other communication method
     print(f"📡 Sending to Pico: {command}")
