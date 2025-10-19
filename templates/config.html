@@ -47,19 +47,25 @@
             </div>
             <div class="row">
                 <label for="rotary_speed">Rotary Speed (0-100)</label>
-                <input id="rotary_speed" type="number" min="0" max="100" step="1" value="50">
-                <label for="rotary_accel_steps">Accel Steps</label>
-                <input id="rotary_accel_steps" type="number" min="1" step="1" value="100">
+                <input id="rotary_speed" type="number" min="0" max="100" step="1" value="100">
+                <label for="rotary_accel_steps">Rotary Accel Steps</label>
+                <input id="rotary_accel_steps" type="number" min="1" step="1" value="50">
             </div>
             <div class="row">
-                <label for="rotary_decel_steps">Decel Steps</label>
-                <input id="rotary_decel_steps" type="number" min="1" step="1" value="100">
-                <label for="slider_in_speed">Slider In Speed (0-100)</label>
-                <input id="slider_in_speed" type="number" min="0" max="100" step="1" value="50">
+                <label for="rotary_decel_steps">Rotary Decel Steps</label>
+                <input id="rotary_decel_steps" type="number" min="1" step="1" value="50">
+                <label for="slider_in_speed">Slider In Speed (0-150)</label>
+                <input id="slider_in_speed" type="number" min="0" max="150" step="1" value="100">
             </div>
             <div class="row">
-                <label for="slider_out_speed">Slider Out Speed (0-100)</label>
-                <input id="slider_out_speed" type="number" min="0" max="100" step="1" value="50">
+                <label for="slider_out_speed">Slider Out Speed (0-150)</label>
+                <input id="slider_out_speed" type="number" min="0" max="150" step="1" value="100">
+                <label for="slider_accel_steps">Slider Accel Steps</label>
+                <input id="slider_accel_steps" type="number" min="1" step="1" value="5">
+            </div>
+            <div class="row">
+                <label for="slider_decel_steps">Slider Decel Steps</label>
+                <input id="slider_decel_steps" type="number" min="1" step="1" value="5">
                 <button id="btn-save-config" class="btn-move">Save</button>
             </div>
         </div>

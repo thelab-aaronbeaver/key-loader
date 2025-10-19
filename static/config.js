@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const inpRotaryDecel = document.getElementById('rotary_decel_steps');
     const inpInSpeed = document.getElementById('slider_in_speed');
     const inpOutSpeed = document.getElementById('slider_out_speed');
+    const inpSliderAccel = document.getElementById('slider_accel_steps');
+    const inpSliderDecel = document.getElementById('slider_decel_steps');
     const btnSaveCfg = document.getElementById('btn-save-config');
     const hall = document.getElementById('hall');
     const inductive = document.getElementById('inductive');
@@ -143,6 +145,8 @@ document.addEventListener('DOMContentLoaded', () => {
             inpRotaryDecel.value = cfg.rotary_decel_steps;
             inpInSpeed.value = cfg.slider_in_speed;
             inpOutSpeed.value = cfg.slider_out_speed;
+            inpSliderAccel.value = cfg.slider_accel_steps || 5;
+            inpSliderDecel.value = cfg.slider_decel_steps || 5;
         } catch (e) {
             msg.textContent = 'Load config error: ' + e.message;
         }
@@ -161,7 +165,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     rotary_accel_steps: parseInt(inpRotaryAccel.value, 10),
                     rotary_decel_steps: parseInt(inpRotaryDecel.value, 10),
                     slider_in_speed: parseInt(inpInSpeed.value, 10),
-                    slider_out_speed: parseInt(inpOutSpeed.value, 10)
+                    slider_out_speed: parseInt(inpOutSpeed.value, 10),
+                    slider_accel_steps: parseInt(inpSliderAccel.value, 10),
+                    slider_decel_steps: parseInt(inpSliderDecel.value, 10)
                 })
             });
             const data = await res.json();
