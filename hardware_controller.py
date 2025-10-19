@@ -238,16 +238,16 @@ class HardwareController:
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.HIGH)
         print(f"Moving slider to MAX: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}")
         
-        # Calculate acceleration/deceleration phases - ensure cruise_phase is never negative
-        accel_phase = min(accel_steps, max_pulses // 4)  # Use 1/4 instead of 1/3
-        decel_phase = min(decel_steps, max_pulses // 4)  # Use 1/4 instead of 1/3
+        # OPTIMIZED for TB6600 (400 pulses/rev) - use much smaller acceleration phases
+        accel_phase = min(accel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
+        decel_phase = min(decel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
         cruise_phase = max(0, max_pulses - accel_phase - decel_phase)  # Ensure non-negative
         
         print(f"Slider MAX phases: accel={accel_phase}, cruise={cruise_phase}, decel={decel_phase}")
         
         step_count = 0
         
-        # Acceleration phase
+        # Acceleration phase (very short for TB6600)
         for i in range(accel_phase):
             if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (accel phase)")
@@ -260,7 +260,7 @@ class HardwareController:
             time.sleep(delay)
             step_count += 1
         
-        # Cruise phase
+        # Cruise phase (most of the movement for TB6600)
         for _ in range(cruise_phase):
             if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (cruise phase)")
@@ -271,7 +271,7 @@ class HardwareController:
             time.sleep(speed_delay)
             step_count += 1
         
-        # Deceleration phase
+        # Deceleration phase (very short for TB6600)
         for i in range(decel_phase):
             if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (decel phase)")
@@ -296,16 +296,16 @@ class HardwareController:
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.LOW)
         print(f"Moving slider to MIN: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}")
         
-        # Calculate acceleration/deceleration phases - ensure cruise_phase is never negative
-        accel_phase = min(accel_steps, max_pulses // 4)  # Use 1/4 instead of 1/3
-        decel_phase = min(decel_steps, max_pulses // 4)  # Use 1/4 instead of 1/3
+        # OPTIMIZED for TB6600 (400 pulses/rev) - use much smaller acceleration phases
+        accel_phase = min(accel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
+        decel_phase = min(decel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
         cruise_phase = max(0, max_pulses - accel_phase - decel_phase)  # Ensure non-negative
         
         print(f"Slider MIN phases: accel={accel_phase}, cruise={cruise_phase}, decel={decel_phase}")
         
         step_count = 0
         
-        # Acceleration phase
+        # Acceleration phase (very short for TB6600)
         for i in range(accel_phase):
             if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (accel phase)")
@@ -318,7 +318,7 @@ class HardwareController:
             time.sleep(delay)
             step_count += 1
         
-        # Cruise phase
+        # Cruise phase (most of the movement for TB6600)
         for _ in range(cruise_phase):
             if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (cruise phase)")
@@ -329,7 +329,7 @@ class HardwareController:
             time.sleep(speed_delay)
             step_count += 1
         
-        # Deceleration phase
+        # Deceleration phase (very short for TB6600)
         for i in range(decel_phase):
             if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (decel phase)")
