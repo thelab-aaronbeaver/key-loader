@@ -9,6 +9,7 @@
     --warning-color: #d29922;
     --danger-color: #da3633;
     --primary-color: #cace00;
+    --text-color: #000000;
 }
 
 /* Shared base */
@@ -199,7 +200,7 @@ button.btn-back {
 
 #msg {
     background: var(--panel-color);
-    color: var(--text-accent-color);
+    color: var(--text-color);
     padding: 10px;
     border-radius: 6px;
     min-height: 28px;
