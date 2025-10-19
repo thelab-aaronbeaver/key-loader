@@ -9,12 +9,12 @@ class HardwareController:
         # Rotary Motor (OMC Closed-Loop Stepper)
         self.STEP_PIN = 20
         self.DIR_PIN = 21
-        self.ENABLE_PIN = 22  # Enable pin for rotary motor
+        self.ENABLE_PIN = 19  # Enable pin for rotary motor
         self.ALM_PIN = 16
         
         # Sensors
         self.HALL_PIN = 26
-        self.INDUCTIVE_PIN = 19
+        self.INDUCTIVE_PIN = 22
         
         # --- ADDED: Legacy rotary limit switch pins (optional) ---
         self.HOME_SWITCH_PIN = 5  # Optional legacy home switch (not required if using hall)
@@ -27,7 +27,7 @@ class HardwareController:
         
         # --- ADDED: Slider motor limit switches ---
         # NOTE: Adjust these BCM pins to match wiring for the slider rail.
-        self.SLIDER_MIN_PIN = 13
+        self.SLIDER_MIN_PIN = 27
         self.SLIDER_MAX_PIN = 12
 
         # --- MODIFIED: Motor Configuration for MKS SERVO42C (NEMA 17) ---
@@ -207,36 +207,106 @@ class HardwareController:
         return GPIO.input(self.SLIDER_MAX_PIN) == GPIO.LOW
 
     # --- ADDED: Slider movement helpers ---
-    def slider_move_to_max(self, speed_delay: float, max_pulses: int = 20000) -> bool:
-        """Drive slider outward until MAX switch triggers or max_pulses reached."""
+    def slider_move_to_max(self, speed_delay: float, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50) -> bool:
+        """Drive slider outward until MAX switch triggers or max_pulses reached with acceleration/deceleration."""
         # Enable slider motor
         self.enable_slider_motor(True)
         time.sleep(0.1)
         
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.HIGH)
-        for _ in range(max_pulses):
+        
+        # Calculate acceleration/deceleration phases
+        accel_phase = min(accel_steps, max_pulses // 3)
+        decel_phase = min(decel_steps, max_pulses // 3)
+        cruise_phase = max_pulses - accel_phase - decel_phase
+        
+        step_count = 0
+        
+        # Acceleration phase
+        for i in range(accel_phase):
+            if self.read_slider_max():
+                return True
+            # Gradually decrease delay (increase speed)
+            delay = speed_delay * (1.0 + (accel_phase - i) / accel_phase)
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
+            time.sleep(delay)
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
+            time.sleep(delay)
+            step_count += 1
+        
+        # Cruise phase
+        for _ in range(cruise_phase):
             if self.read_slider_max():
                 return True
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(speed_delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
             time.sleep(speed_delay)
+            step_count += 1
+        
+        # Deceleration phase
+        for i in range(decel_phase):
+            if self.read_slider_max():
+                return True
+            # Gradually increase delay (decrease speed)
+            delay = speed_delay * (1.0 + (i + 1) / decel_phase)
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
+            time.sleep(delay)
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
+            time.sleep(delay)
+            step_count += 1
+        
         return False
 
-    def slider_move_to_min(self, speed_delay: float, max_pulses: int = 20000) -> bool:
-        """Drive slider inward until MIN switch triggers or max_pulses reached."""
+    def slider_move_to_min(self, speed_delay: float, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50) -> bool:
+        """Drive slider inward until MIN switch triggers or max_pulses reached with acceleration/deceleration."""
         # Enable slider motor
         self.enable_slider_motor(True)
         time.sleep(0.1)
         
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.LOW)
-        for _ in range(max_pulses):
+        
+        # Calculate acceleration/deceleration phases
+        accel_phase = min(accel_steps, max_pulses // 3)
+        decel_phase = min(decel_steps, max_pulses // 3)
+        cruise_phase = max_pulses - accel_phase - decel_phase
+        
+        step_count = 0
+        
+        # Acceleration phase
+        for i in range(accel_phase):
+            if self.read_slider_min():
+                return True
+            # Gradually decrease delay (increase speed)
+            delay = speed_delay * (1.0 + (accel_phase - i) / accel_phase)
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
+            time.sleep(delay)
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
+            time.sleep(delay)
+            step_count += 1
+        
+        # Cruise phase
+        for _ in range(cruise_phase):
             if self.read_slider_min():
                 return True
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(speed_delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
             time.sleep(speed_delay)
+            step_count += 1
+        
+        # Deceleration phase
+        for i in range(decel_phase):
+            if self.read_slider_min():
+                return True
+            # Gradually increase delay (decrease speed)
+            delay = speed_delay * (1.0 + (i + 1) / decel_phase)
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
+            time.sleep(delay)
+            GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
+            time.sleep(delay)
+            step_count += 1
+        
         return False
 
     def cleanup(self):

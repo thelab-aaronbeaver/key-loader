@@ -31,15 +31,15 @@ This system automates the process of detecting keys on a rotating table and trig
 |-----------|----------|----------|
 | Rotary Step | 20 | Stepper motor step signal (PUL+) |
 | Rotary Dir | 21 | Stepper motor direction (DIR+) |
-| Rotary Enable | 22 | Motor enable/disable control (EN+) |
+| Rotary Enable | 19 | Motor enable/disable control (EN+) |
 | Rotary Alarm | 16 | Motor stall detection (ALM+) |
 | Hall Sensor | 26 | Home position detection |
-| Inductive Sensor | 19 | Key detection |
+| Inductive Sensor | 22 | Key detection |
 | Slider Step | 23 | Slider motor step signal |
 | Slider Dir | 24 | Slider motor direction |
 | Slider Enable | 25 | Slider motor enable/disable control |
-| Slider IN | 13 | Slider inward limit switch |
-| Slider OUT | 12 | Slider outward limit switch |
+| Slider MIN | 27 | Slider inward limit switch |
+| Slider MAX | 12 | Slider outward limit switch |
 | Home Switch | 5 | Legacy home switch (optional) |
 | End Switch | 6 | Legacy end switch (optional) |
 
@@ -169,7 +169,7 @@ python app.py
    - PUL- → Ground (Raspberry Pi)
    - DIR+ → GPIO 21 (Raspberry Pi)
    - DIR- → Ground (Raspberry Pi)
-   - EN+ → GPIO 22 (Raspberry Pi)
+   - EN+ → GPIO 19 (Raspberry Pi)
    - EN- → Ground (Raspberry Pi)
    - ALM+ → GPIO 16 (Raspberry Pi)
    - ALM- → Ground (Raspberry Pi)
@@ -211,7 +211,7 @@ python app.py
 4. **Web Interface Unavailable**: Verify Flask server is running
 5. **Rotary Motor Issues**:
    - Ensure differential signal wiring (PUL+/PUL-, DIR+/DIR-, EN+/EN-)
-   - Check enable pin wiring (EN+ to GPIO 22, EN- to ground)
+   - Check enable pin wiring (EN+ to GPIO 19, EN- to ground)
    - Verify motor is enabled before movement
    - Check microstepping DIP switch settings
    - Verify closed-loop controller is properly configured
