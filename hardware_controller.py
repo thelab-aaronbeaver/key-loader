@@ -28,7 +28,7 @@ class HardwareController:
         # --- ADDED: Slider motor limit switches ---
         # NOTE: Adjust these BCM pins to match wiring for the slider rail.
         self.SLIDER_MIN_PIN = 27
-        self.SLIDER_MAX_PIN = 12
+        self.SLIDER_MAX_PIN = 17
 
         # --- MODIFIED: Motor Configuration for TB6600 Driver ---
         # TB6600 is configured for 400 pulses per revolution (2x microstepping on 1.8° motor).
