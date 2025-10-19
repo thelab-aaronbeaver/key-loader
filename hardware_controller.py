@@ -30,12 +30,12 @@ class HardwareController:
         self.SLIDER_MIN_PIN = 27
         self.SLIDER_MAX_PIN = 17
 
-        # --- MODIFIED: Motor Configuration for TB6600 Driver ---
-        # TB6600 is configured for 400 pulses per revolution (2x microstepping on 1.8° motor).
-        # 200 full steps * 2 microsteps = 400 pulses per revolution.
-        # This matches the TB6600 DIP switch settings for 2x microstepping.
-        self.PULSES_PER_REV = 400
-        self.SPEED_DELAY = 0.0002 # TB6600 can handle faster speeds than closed-loop drivers
+        # --- MODIFIED: Motor Configuration for CL57T Driver (Rotary) ---
+        # CL57T is configured for 3200 pulses per revolution (16x microstepping on 1.8° motor).
+        # 200 full steps * 16 microsteps = 3200 pulses per revolution.
+        # This matches the CL57T DIP switch settings for 16x microstepping.
+        self.PULSES_PER_REV = 3200
+        self.SPEED_DELAY = 0.0002 # CL57T can handle faster speeds than basic drivers
 
         # --- Setup GPIO ---
         GPIO.setmode(GPIO.BCM)
@@ -206,6 +206,27 @@ class HardwareController:
     def read_slider_max(self):
         return GPIO.input(self.SLIDER_MAX_PIN) == GPIO.LOW
 
+    # --- ADDED: Debounced limit switch reads to prevent phantom triggers ---
+    def read_slider_min_debounced(self):
+        """Read MIN switch with debouncing to prevent phantom triggers."""
+        readings = []
+        for _ in range(5):  # Take 5 readings
+            readings.append(GPIO.input(self.SLIDER_MIN_PIN) == GPIO.LOW)
+            time.sleep(0.001)  # 1ms delay
+        
+        # Return True only if majority of readings are True
+        return sum(readings) >= 3
+
+    def read_slider_max_debounced(self):
+        """Read MAX switch with debouncing to prevent phantom triggers."""
+        readings = []
+        for _ in range(5):  # Take 5 readings
+            readings.append(GPIO.input(self.SLIDER_MAX_PIN) == GPIO.LOW)
+            time.sleep(0.001)  # 1ms delay
+        
+        # Return True only if majority of readings are True
+        return sum(readings) >= 3
+
     # --- ADDED: Slider movement helpers ---
     def slider_move_to_max(self, speed_delay: float, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50) -> bool:
         """Drive slider outward until MAX switch triggers or max_pulses reached with acceleration/deceleration."""
@@ -227,7 +248,7 @@ class HardwareController:
         
         # Acceleration phase
         for i in range(accel_phase):
-            if self.read_slider_max():
+            if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (accel phase)")
                 return True
             # Gradually decrease delay (increase speed)
@@ -240,7 +261,7 @@ class HardwareController:
         
         # Cruise phase
         for _ in range(cruise_phase):
-            if self.read_slider_max():
+            if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (cruise phase)")
                 return True
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
@@ -251,7 +272,7 @@ class HardwareController:
         
         # Deceleration phase
         for i in range(decel_phase):
-            if self.read_slider_max():
+            if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (decel phase)")
                 return True
             # Gradually increase delay (decrease speed)
@@ -285,7 +306,7 @@ class HardwareController:
         
         # Acceleration phase
         for i in range(accel_phase):
-            if self.read_slider_min():
+            if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (accel phase)")
                 return True
             # Gradually decrease delay (increase speed)
@@ -298,7 +319,7 @@ class HardwareController:
         
         # Cruise phase
         for _ in range(cruise_phase):
-            if self.read_slider_min():
+            if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (cruise phase)")
                 return True
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
@@ -309,7 +330,7 @@ class HardwareController:
         
         # Deceleration phase
         for i in range(decel_phase):
-            if self.read_slider_min():
+            if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (decel phase)")
                 return True
             # Gradually increase delay (decrease speed)
