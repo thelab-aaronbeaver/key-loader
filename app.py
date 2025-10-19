@@ -30,13 +30,13 @@ def load_config():
     default_config = {
         "step_degrees": 36.0,
         "pause_seconds": 1.0,       # time to hold at position (seconds)
-        "slider_in_speed": 80,      # 0-100 speed scale (0=stopped, 100=fastest) - increased for faster operation
-        "slider_out_speed": 80,     # 0-100 speed scale (0=stopped, 100=fastest) - increased for faster operation
-        "slider_accel_steps": 30,   # steps for slider acceleration ramp-up
-        "slider_decel_steps": 30,   # steps for slider deceleration ramp-down
-        "rotary_speed": 80,         # 0-100 speed scale for rotary motor - increased for TB6600 driver
-        "rotary_accel_steps": 100,  # steps for acceleration ramp-up
-        "rotary_decel_steps": 100,  # steps for deceleration ramp-down
+        "slider_in_speed": 100,     # 0-100 speed scale (0=stopped, 100=fastest) - MAXIMUM SPEED
+        "slider_out_speed": 100,    # 0-100 speed scale (0=stopped, 100=fastest) - MAXIMUM SPEED
+        "slider_accel_steps": 20,   # steps for slider acceleration ramp-up - reduced for faster acceleration
+        "slider_decel_steps": 20,   # steps for slider deceleration ramp-down - reduced for faster deceleration
+        "rotary_speed": 100,        # 0-100 speed scale for rotary motor - MAXIMUM SPEED
+        "rotary_accel_steps": 50,   # steps for acceleration ramp-up - reduced for faster acceleration
+        "rotary_decel_steps": 50,   # steps for deceleration ramp-down - reduced for faster deceleration
         "cycles": 10                # default cycle count
     }
     
@@ -71,9 +71,9 @@ def speed_to_delay(speed):
     """Convert 0-100 speed to delay in seconds. 0=stopped, 100=fastest."""
     if speed <= 0:
         return 1.0  # Very slow if stopped
-    # Convert to delay: 100 = 0.00002s (20μs), 1 = 0.01s (inverse relationship)
-    # Optimized for TB6600 driver - can handle faster speeds than closed-loop drivers
-    return max(0.00002, 0.01 / (speed / 100.0))
+    # Convert to delay: 100 = 0.000005s (5μs), 1 = 0.01s (inverse relationship)
+    # Ultra-fast for TB6600 driver - maximum performance
+    return max(0.000005, 0.01 / (speed / 100.0))
 
 def send_pico_command(command):
     #"""Send command to Raspberry Pico. TODO: Implement actual communication."""

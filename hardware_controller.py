@@ -183,8 +183,9 @@ class HardwareController:
         """Convert 0-100 speed to delay in seconds."""
         if speed <= 0:
             return 0.01  # Very slow if stopped
-        # Convert to delay: 100 = 0.0005s, 1 = 0.01s (inverse relationship)
-        return max(0.0005, 0.01 / (speed / 100.0))
+        # Convert to delay: 100 = 0.00001s (10μs), 1 = 0.01s (inverse relationship)
+        # Optimized for CL57T driver - can handle very fast speeds
+        return max(0.00001, 0.01 / (speed / 100.0))
     
     def _step_motor(self, delay):
         """Single step with given delay."""
