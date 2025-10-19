@@ -214,17 +214,21 @@ class HardwareController:
         time.sleep(0.1)
         
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.HIGH)
+        print(f"Moving slider to MAX: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}")
         
-        # Calculate acceleration/deceleration phases
-        accel_phase = min(accel_steps, max_pulses // 3)
-        decel_phase = min(decel_steps, max_pulses // 3)
-        cruise_phase = max_pulses - accel_phase - decel_phase
+        # Calculate acceleration/deceleration phases - ensure cruise_phase is never negative
+        accel_phase = min(accel_steps, max_pulses // 4)  # Use 1/4 instead of 1/3
+        decel_phase = min(decel_steps, max_pulses // 4)  # Use 1/4 instead of 1/3
+        cruise_phase = max(0, max_pulses - accel_phase - decel_phase)  # Ensure non-negative
+        
+        print(f"Slider MAX phases: accel={accel_phase}, cruise={cruise_phase}, decel={decel_phase}")
         
         step_count = 0
         
         # Acceleration phase
         for i in range(accel_phase):
             if self.read_slider_max():
+                print(f"MAX switch triggered at step {step_count} (accel phase)")
                 return True
             # Gradually decrease delay (increase speed)
             delay = speed_delay * (1.0 + (accel_phase - i) / accel_phase)
@@ -237,6 +241,7 @@ class HardwareController:
         # Cruise phase
         for _ in range(cruise_phase):
             if self.read_slider_max():
+                print(f"MAX switch triggered at step {step_count} (cruise phase)")
                 return True
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(speed_delay)
@@ -247,6 +252,7 @@ class HardwareController:
         # Deceleration phase
         for i in range(decel_phase):
             if self.read_slider_max():
+                print(f"MAX switch triggered at step {step_count} (decel phase)")
                 return True
             # Gradually increase delay (decrease speed)
             delay = speed_delay * (1.0 + (i + 1) / decel_phase)
@@ -256,6 +262,7 @@ class HardwareController:
             time.sleep(delay)
             step_count += 1
         
+        print(f"MAX movement completed: {step_count} steps, MAX switch not triggered")
         return False
 
     def slider_move_to_min(self, speed_delay: float, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50) -> bool:
@@ -265,17 +272,21 @@ class HardwareController:
         time.sleep(0.1)
         
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.LOW)
+        print(f"Moving slider to MIN: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}")
         
-        # Calculate acceleration/deceleration phases
-        accel_phase = min(accel_steps, max_pulses // 3)
-        decel_phase = min(decel_steps, max_pulses // 3)
-        cruise_phase = max_pulses - accel_phase - decel_phase
+        # Calculate acceleration/deceleration phases - ensure cruise_phase is never negative
+        accel_phase = min(accel_steps, max_pulses // 4)  # Use 1/4 instead of 1/3
+        decel_phase = min(decel_steps, max_pulses // 4)  # Use 1/4 instead of 1/3
+        cruise_phase = max(0, max_pulses - accel_phase - decel_phase)  # Ensure non-negative
+        
+        print(f"Slider MIN phases: accel={accel_phase}, cruise={cruise_phase}, decel={decel_phase}")
         
         step_count = 0
         
         # Acceleration phase
         for i in range(accel_phase):
             if self.read_slider_min():
+                print(f"MIN switch triggered at step {step_count} (accel phase)")
                 return True
             # Gradually decrease delay (increase speed)
             delay = speed_delay * (1.0 + (accel_phase - i) / accel_phase)
@@ -288,6 +299,7 @@ class HardwareController:
         # Cruise phase
         for _ in range(cruise_phase):
             if self.read_slider_min():
+                print(f"MIN switch triggered at step {step_count} (cruise phase)")
                 return True
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(speed_delay)
@@ -298,6 +310,7 @@ class HardwareController:
         # Deceleration phase
         for i in range(decel_phase):
             if self.read_slider_min():
+                print(f"MIN switch triggered at step {step_count} (decel phase)")
                 return True
             # Gradually increase delay (decrease speed)
             delay = speed_delay * (1.0 + (i + 1) / decel_phase)
@@ -307,6 +320,7 @@ class HardwareController:
             time.sleep(delay)
             step_count += 1
         
+        print(f"MIN movement completed: {step_count} steps, MIN switch not triggered")
         return False
 
     def cleanup(self):

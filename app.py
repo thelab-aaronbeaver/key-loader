@@ -210,7 +210,7 @@ def start_cycle():
             
             # Move slider to OUT limit switch
             app_state["system_message"] = f"Slider at IN. Moving to OUT position..."
-            out_ok = hw.slider_move_to_max(out_delay, accel_steps=accel_steps, decel_steps=decel_steps)
+            out_ok = hw.slider_move_to_max(out_delay, max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps)
             
             if not out_ok:
                 app_state["system_message"] = "ERROR: Slider failed to reach OUT limit switch."
@@ -330,7 +330,7 @@ def api_slider_test_cycle():
         
         # Step 2: Move to MAX limit switch
         app_state["system_message"] = "Moving slider to MAX position..."
-        max_success = hw.slider_move_to_max(out_delay, accel_steps=accel_steps, decel_steps=decel_steps)
+        max_success = hw.slider_move_to_max(out_delay, max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps)
         
         if not max_success:
             app_state["system_message"] = "ERROR: Failed to reach MAX limit switch"
