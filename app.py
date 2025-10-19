@@ -68,12 +68,12 @@ def save_config(config_dict):
 config = load_config()
 
 def speed_to_delay(speed):
-    """Convert 0-150 speed to delay in seconds. 0=stopped, 150=extreme speed."""
+    """Convert 0-200 speed to delay in seconds. 0=stopped, 200=ultra-extreme speed."""
     if speed <= 0:
         return 1.0  # Very slow if stopped
-    # Convert to delay: 150 = 0.0000005s (0.5μs), 1 = 0.01s (inverse relationship)
-    # EXTREME SPEED for TB6600 driver - pushing to absolute limits (up to 150%)
-    return max(0.0000005, 0.01 / (speed / 100.0))
+    # Convert to delay: 200 = 0.0000001s (0.1μs), 1 = 0.01s (inverse relationship)
+    # ULTRA-EXTREME SPEED for TB6600 driver - pushing beyond normal limits (up to 200%)
+    return max(0.0000001, 0.01 / (speed / 100.0))
 
 def send_pico_command(command):
     #"""Send command to Raspberry Pico. TODO: Implement actual communication."""
@@ -106,9 +106,9 @@ def api_set_config():
         if 'pause_seconds' in data:
             config['pause_seconds'] = float(data['pause_seconds'])
         if 'slider_in_speed' in data:
-            config['slider_in_speed'] = max(0, min(150, int(data['slider_in_speed'])))  # allow up to 150% for extreme speeds
+            config['slider_in_speed'] = max(0, min(200, int(data['slider_in_speed'])))  # allow up to 200% for ultra-extreme speeds
         if 'slider_out_speed' in data:
-            config['slider_out_speed'] = max(0, min(150, int(data['slider_out_speed'])))  # allow up to 150% for extreme speeds
+            config['slider_out_speed'] = max(0, min(200, int(data['slider_out_speed'])))  # allow up to 200% for ultra-extreme speeds
         if 'rotary_speed' in data:
             config['rotary_speed'] = max(0, min(100, int(data['rotary_speed'])))  # clamp 0-100
         if 'rotary_accel_steps' in data:
@@ -202,7 +202,8 @@ def start_cycle():
             
             # Move slider to IN limit switch first
             app_state["system_message"] = f"Key detected. Moving slider to IN position..."
-            in_ok = hw.slider_move_to_min(in_delay, accel_steps=accel_steps, decel_steps=decel_steps)
+            ultra_fast = config['slider_in_speed'] > 150
+            in_ok = hw.slider_move_to_min(in_delay, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
             
             if not in_ok:
                 app_state["system_message"] = "ERROR: Slider failed to reach IN limit switch."
@@ -210,7 +211,8 @@ def start_cycle():
             
             # Move slider to OUT limit switch
             app_state["system_message"] = f"Slider at IN. Moving to OUT position..."
-            out_ok = hw.slider_move_to_max(out_delay, max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps)
+            ultra_fast = config['slider_out_speed'] > 150
+            out_ok = hw.slider_move_to_max(out_delay, max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
             
             if not out_ok:
                 app_state["system_message"] = "ERROR: Slider failed to reach OUT limit switch."
@@ -322,7 +324,8 @@ def api_slider_test_cycle():
         
         # Step 1: Move to MIN limit switch
         app_state["system_message"] = "Moving slider to MIN position..."
-        min_success = hw.slider_move_to_min(in_delay, accel_steps=accel_steps, decel_steps=decel_steps)
+        ultra_fast = config['slider_in_speed'] > 150
+        min_success = hw.slider_move_to_min(in_delay, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
         
         if not min_success:
             app_state["system_message"] = "ERROR: Failed to reach MIN limit switch"
@@ -330,7 +333,8 @@ def api_slider_test_cycle():
         
         # Step 2: Move to MAX limit switch
         app_state["system_message"] = "Moving slider to MAX position..."
-        max_success = hw.slider_move_to_max(out_delay, max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps)
+        ultra_fast = config['slider_out_speed'] > 150
+        max_success = hw.slider_move_to_max(out_delay, max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
         
         if not max_success:
             app_state["system_message"] = "ERROR: Failed to reach MAX limit switch"
@@ -338,7 +342,8 @@ def api_slider_test_cycle():
         
         # Step 3: Return to MIN limit switch
         app_state["system_message"] = "Returning slider to MIN position..."
-        return_success = hw.slider_move_to_min(in_delay, accel_steps=accel_steps, decel_steps=decel_steps)
+        ultra_fast = config['slider_in_speed'] > 150
+        return_success = hw.slider_move_to_min(in_delay, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
         
         if not return_success:
             app_state["system_message"] = "ERROR: Failed to return to MIN limit switch"

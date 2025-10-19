@@ -229,18 +229,25 @@ class HardwareController:
         return sum(readings) >= 3
 
     # --- ADDED: Slider movement helpers ---
-    def slider_move_to_max(self, speed_delay: float, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50) -> bool:
+    def slider_move_to_max(self, speed_delay: float, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50, ultra_fast: bool = False) -> bool:
         """Drive slider outward until MAX switch triggers or max_pulses reached with acceleration/deceleration."""
         # Enable slider motor
         self.enable_slider_motor(True)
-        time.sleep(0.1)
+        if not ultra_fast:
+            time.sleep(0.1)  # Skip delay in ultra-fast mode
         
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.HIGH)
-        print(f"Moving slider to MAX: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}")
+        print(f"Moving slider to MAX: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
         
-        # OPTIMIZED for TB6600 (400 pulses/rev) - use much smaller acceleration phases
-        accel_phase = min(accel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
-        decel_phase = min(decel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
+        if ultra_fast:
+            # ULTRA-FAST MODE: Minimal acceleration, maximum speed
+            accel_phase = min(2, max_pulses // 100)  # Only 2 steps acceleration
+            decel_phase = min(2, max_pulses // 100)  # Only 2 steps deceleration
+        else:
+            # OPTIMIZED for TB6600 (400 pulses/rev) - use much smaller acceleration phases
+            accel_phase = min(accel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
+            decel_phase = min(decel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
+        
         cruise_phase = max(0, max_pulses - accel_phase - decel_phase)  # Ensure non-negative
         
         print(f"Slider MAX phases: accel={accel_phase}, cruise={cruise_phase}, decel={decel_phase}")
@@ -262,9 +269,16 @@ class HardwareController:
         
         # Cruise phase (most of the movement for TB6600)
         for _ in range(cruise_phase):
-            if self.read_slider_max_debounced():
-                print(f"MAX switch triggered at step {step_count} (cruise phase)")
-                return True
+            if ultra_fast:
+                # ULTRA-FAST: Use non-debounced reading for maximum speed
+                if self.read_slider_max():
+                    print(f"MAX switch triggered at step {step_count} (cruise phase - ultra-fast)")
+                    return True
+            else:
+                if self.read_slider_max_debounced():
+                    print(f"MAX switch triggered at step {step_count} (cruise phase)")
+                    return True
+            
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(speed_delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
@@ -287,18 +301,25 @@ class HardwareController:
         print(f"MAX movement completed: {step_count} steps, MAX switch not triggered")
         return False
 
-    def slider_move_to_min(self, speed_delay: float, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50) -> bool:
+    def slider_move_to_min(self, speed_delay: float, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50, ultra_fast: bool = False) -> bool:
         """Drive slider inward until MIN switch triggers or max_pulses reached with acceleration/deceleration."""
         # Enable slider motor
         self.enable_slider_motor(True)
-        time.sleep(0.1)
+        if not ultra_fast:
+            time.sleep(0.1)  # Skip delay in ultra-fast mode
         
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.LOW)
-        print(f"Moving slider to MIN: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}")
+        print(f"Moving slider to MIN: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
         
-        # OPTIMIZED for TB6600 (400 pulses/rev) - use much smaller acceleration phases
-        accel_phase = min(accel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
-        decel_phase = min(decel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
+        if ultra_fast:
+            # ULTRA-FAST MODE: Minimal acceleration, maximum speed
+            accel_phase = min(2, max_pulses // 100)  # Only 2 steps acceleration
+            decel_phase = min(2, max_pulses // 100)  # Only 2 steps deceleration
+        else:
+            # OPTIMIZED for TB6600 (400 pulses/rev) - use much smaller acceleration phases
+            accel_phase = min(accel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
+            decel_phase = min(decel_steps, max_pulses // 20)  # Use 1/20 instead of 1/4 for TB6600
+        
         cruise_phase = max(0, max_pulses - accel_phase - decel_phase)  # Ensure non-negative
         
         print(f"Slider MIN phases: accel={accel_phase}, cruise={cruise_phase}, decel={decel_phase}")
@@ -320,9 +341,16 @@ class HardwareController:
         
         # Cruise phase (most of the movement for TB6600)
         for _ in range(cruise_phase):
-            if self.read_slider_min_debounced():
-                print(f"MIN switch triggered at step {step_count} (cruise phase)")
-                return True
+            if ultra_fast:
+                # ULTRA-FAST: Use non-debounced reading for maximum speed
+                if self.read_slider_min():
+                    print(f"MIN switch triggered at step {step_count} (cruise phase - ultra-fast)")
+                    return True
+            else:
+                if self.read_slider_min_debounced():
+                    print(f"MIN switch triggered at step {step_count} (cruise phase)")
+                    return True
+            
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(speed_delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
