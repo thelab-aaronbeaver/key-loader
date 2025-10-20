@@ -193,7 +193,7 @@ class HardwareController:
             pass
     
     def _speed_to_delay(self, speed):
-        """Convert 0-100 speed to delay in seconds."""
+        """Convert 0-100 speed to delay in seconds for rotary motor (CL57T driver)."""
         if speed <= 0:
             return 0.01  # Very slow if stopped
         # Convert to delay: 100 = 0.00001s (10μs), 1 = 0.01s (inverse relationship)
