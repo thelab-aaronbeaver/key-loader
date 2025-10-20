@@ -347,6 +347,29 @@ def api_slider_test_cycle():
     finally:
         app_state["is_running"] = False
 
+# --- ADDED: Pico test endpoint ---
+@app.route('/api/pico/test', methods=['POST'])
+def api_pico_test():
+    """Test Pico trigger functionality"""
+    if app_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+    
+    try:
+        app_state["is_running"] = True
+        app_state["system_message"] = "Testing Pico trigger..."
+        
+        # Send trigger pulse to Pico
+        hw.trigger_pico(duration_ms=100)
+        
+        app_state["system_message"] = "Pico trigger sent successfully"
+        return jsonify({"success": True, "message": "Pico trigger sent"})
+        
+    except Exception as e:
+        app_state["system_message"] = f"Pico test error: {str(e)}"
+        return jsonify({"success": False, "message": app_state["system_message"]})
+    finally:
+        app_state["is_running"] = False
+
 
 if __name__ == '__main__':
     try:

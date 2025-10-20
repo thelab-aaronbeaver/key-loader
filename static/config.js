@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnSetZero = document.getElementById('btn-set-zero');
     const btnSliderTest = document.getElementById('btn-slider-test');
     const sliderStatus = document.getElementById('slider-status');
+    const btnPicoTest = document.getElementById('btn-pico-test');
+    const picoStatus = document.getElementById('pico-status');
     const msg = document.getElementById('msg');
     // Config inputs
     const inpStepDeg = document.getElementById('step_degrees');
@@ -28,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnFwd.disabled = b;
         btnBwd.disabled = b;
         btnSliderTest.disabled = b;
+        btnPicoTest.disabled = b;
     }
 
     async function postJSON(url, body) {
@@ -120,6 +123,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    btnPicoTest.addEventListener('click', async () => {
+        picoStatus.textContent = 'Testing Pico trigger...';
+        picoStatus.className = 'status-text testing';
+        msg.textContent = 'Sending trigger to Pico...';
+        setBusy(true);
+        try {
+            const data = await postJSON('/api/pico/test');
+            if (data.success) {
+                picoStatus.textContent = 'Trigger Sent';
+                picoStatus.className = 'status-text complete';
+                msg.textContent = 'Pico trigger sent successfully - check if Enter key was pressed';
+            } else {
+                picoStatus.textContent = 'Test Failed';
+                picoStatus.className = 'status-text failed';
+                msg.textContent = data.message || 'Pico test failed';
+            }
+        } catch (e) {
+            picoStatus.textContent = 'Test Error';
+            picoStatus.className = 'status-text failed';
+            msg.textContent = 'Error: ' + e.message;
+        } finally {
+            setBusy(false);
+        }
+    });
+
     async function refreshStatus() {
         try {
             const res = await fetch('/api/status');
@@ -178,8 +206,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Initialize slider status
+    // Initialize status elements
     sliderStatus.className = 'status-text';
+    picoStatus.className = 'status-text';
 
     refreshStatus();
     loadConfig();
