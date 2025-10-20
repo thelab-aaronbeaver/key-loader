@@ -30,8 +30,8 @@ def load_config():
     default_config = {
         "step_degrees": 36.0,
         "pause_seconds": 1.0,       # time to hold at position (seconds)
-        "slider_in_speed": 120,     # 0-200 speed scale (0=stopped, 200=ultra-extreme) - SERVO42C 12V OPTIMIZED
-        "slider_out_speed": 120,    # 0-200 speed scale (0=stopped, 200=ultra-extreme) - SERVO42C 12V OPTIMIZED
+        "slider_in_speed": 80,      # 0-100 speed scale (0=stopped, 100=750 RPM) - SERVO42C 12V OPTIMIZED
+        "slider_out_speed": 80,     # 0-100 speed scale (0=stopped, 100=750 RPM) - SERVO42C 12V OPTIMIZED
         "slider_accel_steps": 15,   # steps for slider acceleration ramp-up - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
         "slider_decel_steps": 15,   # steps for slider deceleration ramp-down - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
         "rotary_speed": 100,        # 0-100 speed scale for rotary motor - MAXIMUM SPEED
@@ -68,12 +68,12 @@ def save_config(config_dict):
 config = load_config()
 
 def speed_to_delay(speed):
-    """Convert 0-200 speed to delay in seconds. 0=stopped, 200=750 RPM maximum."""
+    """Convert 0-100 speed to delay in seconds. 0=stopped, 100=750 RPM maximum."""
     if speed <= 0:
         return 1.0  # Very slow if stopped
-    # Convert to delay: 200 = 0.0001s (0.1ms) = 750 RPM, 1 = 0.02s (inverse relationship)
+    # Convert to delay: 100 = 0.0001s (0.1ms) = 750 RPM, 1 = 0.01s (inverse relationship)
     # OPTIMIZED for SERVO42C driver (12V) - 750 RPM maximum
-    return max(0.0001, 0.0002 / (speed / 100.0))
+    return max(0.0001, 0.01 / (speed / 100.0))
 
 def send_pico_command(command):
     #"""Send command to Raspberry Pico. TODO: Implement actual communication."""
@@ -106,9 +106,9 @@ def api_set_config():
         if 'pause_seconds' in data:
             config['pause_seconds'] = float(data['pause_seconds'])
         if 'slider_in_speed' in data:
-            config['slider_in_speed'] = max(0, min(200, int(data['slider_in_speed'])))  # allow up to 200% for ultra-extreme speeds
+            config['slider_in_speed'] = max(0, min(100, int(data['slider_in_speed'])))  # allow up to 100 for 750 RPM maximum
         if 'slider_out_speed' in data:
-            config['slider_out_speed'] = max(0, min(200, int(data['slider_out_speed'])))  # allow up to 200% for ultra-extreme speeds
+            config['slider_out_speed'] = max(0, min(100, int(data['slider_out_speed'])))  # allow up to 100 for 750 RPM maximum
         if 'rotary_speed' in data:
             config['rotary_speed'] = max(0, min(100, int(data['rotary_speed'])))  # clamp 0-100
         if 'rotary_accel_steps' in data:
@@ -200,7 +200,7 @@ def start_cycle():
             
             # Move slider to IN limit switch first
             app_state["system_message"] = f"Key detected. Moving slider to IN position..."
-            ultra_fast = config['slider_in_speed'] > 150
+            ultra_fast = config['slider_in_speed'] > 75
             in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
             
             if not in_ok:

@@ -193,20 +193,20 @@ class HardwareController:
             pass
     
     def _speed_to_delay(self, speed):
-        """Convert 0-100 speed to delay in seconds for rotary motor (30 RPM maximum)."""
+        """Convert 0-100 speed to delay in seconds for rotary motor (300 RPM maximum)."""
         if speed <= 0:
             return 0.01  # Very slow if stopped
-        # Convert to delay: 100 = 0.000625s (0.625ms) = 30 RPM, 1 = 0.0625s (inverse relationship)
-        # Optimized for CL57T driver - 30 RPM maximum
-        return max(0.000625, 0.0625 / (speed / 100.0))
+        # Convert to delay: 100 = 0.0000625s (0.0625ms) = 300 RPM, 1 = 0.00625s (inverse relationship)
+        # Optimized for CL57T driver - 300 RPM maximum
+        return max(0.0000625, 0.00625 / (speed / 100.0))
     
     def _servo42c_speed_to_delay(self, speed):
-        """Convert 0-200 speed to delay for SERVO42C (750 RPM maximum)."""
+        """Convert 0-100 speed to delay for SERVO42C (750 RPM maximum)."""
         if speed <= 0:
             return 0.01  # Very slow if stopped
         # SERVO42C optimized for 750 RPM maximum
-        # 200 = 0.0001s (0.1ms) = 750 RPM, 100 = 0.0002s (0.2ms) = 375 RPM
-        return max(0.0001, 0.0002 / (speed / 100.0))
+        # 100 = 0.0001s (0.1ms) = 750 RPM, 50 = 0.0002s (0.2ms) = 375 RPM
+        return max(0.0001, 0.01 / (speed / 100.0))
     
     def _step_motor(self, delay):
         """Single step with given delay."""
