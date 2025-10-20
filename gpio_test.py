@@ -29,7 +29,8 @@ def test_gpio_basic():
             'SLIDER_MAX_PIN': 17,
             'SLIDER_STEP_PIN': 23,
             'SLIDER_DIR_PIN': 24,
-            'SLIDER_ALM_PIN': 18
+            'SLIDER_ALM_PIN': 18,
+            'PICO_TRIGGER_PIN': 4
         }
         
         print("\n📌 Pin Configuration:")
@@ -81,7 +82,8 @@ def test_output_pins():
         'STEP_PIN': 20,
         'DIR_PIN': 21,
         'SLIDER_STEP_PIN': 23,
-        'SLIDER_DIR_PIN': 24
+        'SLIDER_DIR_PIN': 24,
+        'PICO_TRIGGER_PIN': 4
     }
     
     try:
@@ -176,6 +178,33 @@ def test_sensor_reading():
         print(f"\n❌ Sensor Test Error: {e}")
         return False
 
+def test_pico_trigger():
+    """Test Pico trigger functionality"""
+    print("\n📡 Testing Pico Trigger...")
+    
+    try:
+        PICO_TRIGGER_PIN = 4
+        
+        # Setup trigger pin
+        GPIO.setup(PICO_TRIGGER_PIN, GPIO.OUT)
+        GPIO.output(PICO_TRIGGER_PIN, GPIO.LOW)
+        print(f"✅ Pico trigger pin (GPIO {PICO_TRIGGER_PIN}) configured")
+        
+        print("\n🔄 Testing trigger pulses...")
+        for i in range(3):
+            print(f"  Sending trigger pulse {i+1}/3...")
+            GPIO.output(PICO_TRIGGER_PIN, GPIO.HIGH)
+            time.sleep(0.1)  # 100ms pulse
+            GPIO.output(PICO_TRIGGER_PIN, GPIO.LOW)
+            time.sleep(0.5)  # Wait between pulses
+        
+        print("✅ Pico trigger test complete")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Pico Trigger Test Error: {e}")
+        return False
+
 def main():
     """Main diagnostic function"""
     print("🔧 Key Loader GPIO Diagnostic Tool")
@@ -188,7 +217,8 @@ def main():
             ("Input Pins", test_input_pins),
             ("Output Pins", test_output_pins),
             ("Motor Steps", test_motor_step_sequence),
-            ("Sensor Reading", test_sensor_reading)
+            ("Sensor Reading", test_sensor_reading),
+            ("Pico Trigger", test_pico_trigger)
         ]
         
         results = []

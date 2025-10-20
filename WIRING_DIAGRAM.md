@@ -40,6 +40,8 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 | Slider MAX | 17 | Outward limit | ⚠️ **UPDATED** |
 | Home Switch | 5 | Legacy home (optional) | |
 | End Switch | 6 | Legacy end (optional) | |
+| **Pico Communication** | | | |
+| Pico Trigger | 4 | Trigger pulse to Pico | NEW |
 
 ---
 
@@ -67,6 +69,7 @@ Your phantom limit switch triggers are likely caused by ground loops between the
     │  GPIO 17 ──┤  SLIDER MAX SWITCH (896F)         │
     │  GPIO 5  ──┤  HOME SWITCH (optional)            │
     │  GPIO 6  ──┤  END SWITCH (optional)             │
+    │  GPIO 4  ──┤  PICO TRIGGER (NEW)                │
     │            │                                    │
     │  GND ──────┼── COMMON GROUND                    │
     │  5V ───────┼── POWER FOR SENSORS                │
@@ -381,3 +384,58 @@ SERVO42C (24V) |  50kHz+     |  2x (400)       |  400         |  ⭐⭐⭐⭐⭐
 - **Rough movement**: Increase microstepping (4x instead of 2x)
 - **Alarm triggers**: Check mechanical binding or reduce acceleration
 - **Position loss**: Verify closed-loop feedback is working
+
+---
+
+## 📡 **RASPBERRY PICO COMMUNICATION**
+
+### **Pico Trigger Pin Configuration:**
+- **GPIO Pin**: 4 (BCM numbering)
+- **Function**: Trigger pulse to Raspberry Pico
+- **Signal Type**: Digital output (3.3V logic)
+- **Pulse Duration**: 100ms (configurable)
+- **Default State**: LOW (inactive)
+
+### **Wiring to Pico:**
+```
+Raspberry Pi 4          Raspberry Pico
+┌─────────────┐         ┌─────────────┐
+│ GPIO 4 ─────┼─────────┤ GPIO Pin    │
+│ GND ────────┼─────────┤ GND         │
+│ 3.3V ───────┼─────────┤ 3.3V        │
+└─────────────┘         └─────────────┘
+```
+
+### **Pico Code Example:**
+```python
+import machine
+import time
+
+# Configure trigger pin as input with pull-down
+trigger_pin = machine.Pin(2, machine.Pin.IN, machine.Pin.PULL_DOWN)
+
+def check_trigger():
+    if trigger_pin.value() == 1:
+        print("Trigger received from Pi!")
+        # Execute your poles timer function here
+        execute_poles_timer()
+        return True
+    return False
+
+def execute_poles_timer():
+    # Your poles timer logic here
+    print("Starting poles timer...")
+    time.sleep(2)  # Example: 2 second timer
+    print("Poles timer complete!")
+
+# Main loop
+while True:
+    check_trigger()
+    time.sleep(0.01)  # Check every 10ms
+```
+
+### **Trigger Behavior:**
+- **When triggered**: GPIO 4 goes HIGH for 100ms, then returns to LOW
+- **Pico response**: Should detect the HIGH pulse and execute poles timer
+- **Timing**: Trigger occurs when key is detected and slider starts moving
+- **Reliability**: 100ms pulse ensures reliable detection even with brief interruptions

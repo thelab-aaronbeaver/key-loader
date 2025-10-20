@@ -1,0 +1,8 @@
+# Raspberry Pico Keyboard Emulator Requirements
+# Install these libraries on your Pico using CircuitPython
+
+# Core USB HID library for keyboard emulation
+adafruit-circuitpython-hid
+
+# Alternative: If using MicroPython instead of CircuitPython
+# micropython-adafruit-hid

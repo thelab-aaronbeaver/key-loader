@@ -67,21 +67,14 @@ def save_config(config_dict):
 # Load initial config
 config = load_config()
 
-def speed_to_delay(speed):
-    """Convert 0-100 speed to delay in seconds. 0=stopped, 100=750 RPM maximum."""
-    if speed <= 0:
-        return 1.0  # Very slow if stopped
-    # Convert to delay: 100 = 0.0001s (0.1ms) = 750 RPM, 1 = 0.01s (inverse relationship)
-    # OPTIMIZED for SERVO42C driver (12V) - 750 RPM maximum
-    return max(0.0001, 0.01 / (speed / 100.0))
+# REMOVED: speed_to_delay() function - now handled by SERVO42C-specific function in hardware_controller.py
 
 def send_pico_command(command):
-    #"""Send command to Raspberry Pico. TODO: Implement actual communication."""
-    # Placeholder for Pico communication
-    # This could be serial, USB, I2C, or other communication method
+    """Send command to Raspberry Pico via GPIO trigger pulse."""
     print(f"📡 Sending to Pico: {command}")
-    # TODO: Implement actual Pico communication here
-    # Example: ser.write(f"{command}\n".encode()) for serial communication
+    
+    # Trigger Pico via GPIO pin (100ms pulse)
+    hw.trigger_pico(duration_ms=100)
 
 @app.route('/')
 def index():
@@ -195,8 +188,8 @@ def start_cycle():
             send_pico_command("trigger_function")
             
             # Start slider movement sequence: IN → OUT
-            accel_steps = config.get('slider_accel_steps', 30)
-            decel_steps = config.get('slider_decel_steps', 30)
+            accel_steps = config.get('slider_accel_steps', 15)
+            decel_steps = config.get('slider_decel_steps', 15)
             
             # Move slider to IN limit switch first
             app_state["system_message"] = f"Key detected. Moving slider to IN position..."
@@ -315,8 +308,8 @@ def api_slider_test_cycle():
     
     try:
         # Get current slider speeds and acceleration from config
-        accel_steps = config.get('slider_accel_steps', 30)
-        decel_steps = config.get('slider_decel_steps', 30)
+        accel_steps = config.get('slider_accel_steps', 15)
+        decel_steps = config.get('slider_decel_steps', 15)
         
         # Step 1: Move to MIN limit switch
         app_state["system_message"] = "Moving slider to MIN position..."
