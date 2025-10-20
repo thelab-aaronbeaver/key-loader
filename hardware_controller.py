@@ -250,15 +250,18 @@ class HardwareController:
         return sum(readings) >= 3
 
     # --- ADDED: Slider movement helpers ---
-    def slider_move_to_max(self, speed_delay: float, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50, ultra_fast: bool = False) -> bool:
+    def slider_move_to_max(self, speed: int, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50, ultra_fast: bool = False) -> bool:
         """Drive slider outward until MAX switch triggers or max_pulses reached with acceleration/deceleration."""
         # Enable slider motor
         self.enable_slider_motor(True)
         if not ultra_fast:
             time.sleep(0.1)  # Skip delay in ultra-fast mode
         
+        # Convert speed to SERVO42C-optimized delay
+        speed_delay = self._servo42c_speed_to_delay(speed)
+        
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.HIGH)
-        print(f"Moving slider to MAX: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
+        print(f"Moving slider to MAX: speed={speed}, delay={speed_delay:.6f}s, max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
         
         if ultra_fast:
             # ULTRA-FAST MODE: Minimal acceleration, maximum speed for SERVO42C (12V)
@@ -331,15 +334,18 @@ class HardwareController:
         print(f"MAX movement completed: {step_count} steps, MAX switch not triggered")
         return False
 
-    def slider_move_to_min(self, speed_delay: float, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50, ultra_fast: bool = False) -> bool:
+    def slider_move_to_min(self, speed: int, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50, ultra_fast: bool = False) -> bool:
         """Drive slider inward until MIN switch triggers or max_pulses reached with acceleration/deceleration."""
         # Enable slider motor
         self.enable_slider_motor(True)
         if not ultra_fast:
             time.sleep(0.1)  # Skip delay in ultra-fast mode
         
+        # Convert speed to SERVO42C-optimized delay
+        speed_delay = self._servo42c_speed_to_delay(speed)
+        
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.LOW)
-        print(f"Moving slider to MIN: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
+        print(f"Moving slider to MIN: speed={speed}, delay={speed_delay:.6f}s, max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
         
         if ultra_fast:
             # ULTRA-FAST MODE: Minimal acceleration, maximum speed for SERVO42C (12V)
