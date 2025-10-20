@@ -14,7 +14,7 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 - **Rotary Motor**: 23HS45-4204D-E1000 (3.0Nm Closed loop stepper)
 - **Rotary Driver**: CL57T (Nema 23/24 Closed loop driver V4.1)
 - **Slider Motor**: Nema 17 Pancake (1A, 17Ncm, 1.8°)
-- **Slider Driver**: TB6600 (4A, 9-42V, 32 microsteps)
+- **Slider Driver**: MKS SERVO42C NEMA17 Closed Loop Stepper Motor Driver (Low Noise)
 - **Inductive Sensor**: Taiss LJ12A3-4-Z/BX (NPN NO, DC6-36V, 4mm)
 - **Hall Sensor**: HiLetgo NJK-5002C (NPN, 3-wire, NO)
 - **Limit Switches**: 896F Mini Horizontal Mechanical (2x)
@@ -30,10 +30,11 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 | **Sensors** | | | |
 | Hall Sensor | 26 | Home position (NJK-5002C) | |
 | Inductive Sensor | 22 | Key detection (LJ12A3-4-Z/BX) | |
-| **Slider Motor (TB6600)** | | | |
-| STEP | 23 | Step signal | |
-| DIR | 24 | Direction | |
-| ENABLE | 25 | Enable/Disable | |
+| **Slider Motor (SERVO42C)** | | | |
+| STEP | 23 | Step signal (PUL+) | |
+| DIR | 24 | Direction (DIR+) | |
+| ENABLE | 25 | Enable/Disable (ENA) | |
+| ALARM | 18 | Stall detection (ALM) | |
 | **Limit Switches (896F)** | | | |
 | Slider MIN | 27 | Inward limit | |
 | Slider MAX | 17 | Outward limit | ⚠️ **UPDATED** |
@@ -52,12 +53,15 @@ Your phantom limit switch triggers are likely caused by ground loops between the
     │  GPIO 19 ──┤  CL57T DRIVER                      │
     │  GPIO 16 ──┤  (Rotary Motor)                    │
     │            │                                    │
-    │  GPIO 23 ──┤  TB6600 DRIVER                     │
+    │  GPIO 23 ──┤  SERVO42C DRIVER                   │
     │  GPIO 24 ──┤  (Slider Motor)                    │
     │  GPIO 25 ──┤                                    │
+    │  GPIO 18 ──┤                                    │
     │            │                                    │
     │  GPIO 26 ──┤  HALL SENSOR (NJK-5002C)          │
+    │            │  └─ Voltage Divider (10kΩ/3.3kΩ)  │
     │  GPIO 22 ──┤  INDUCTIVE SENSOR (LJ12A3-4-Z/BX) │
+    │            │  └─ Voltage Divider (10kΩ/3.3kΩ)  │
     │            │                                    │
     │  GPIO 27 ──┤  SLIDER MIN SWITCH (896F)         │
     │  GPIO 17 ──┤  SLIDER MAX SWITCH (896F)         │
@@ -102,11 +106,13 @@ Your phantom limit switch triggers are likely caused by ground loops between the
     │  LIMIT SWITCHES       │  SENSORS              │
     │  (896F Mini)          │  (Powered by LM317)   │
     │  ┌─────────────────┐  │  ┌─────────────────┐  │
-    │  │ MIN ── GPIO 27  │  │  │ HALL ── GPIO 26 │  │
-    │  │ MAX ── GPIO 17  │  │  │ IND ── GPIO 22  │  │
-    │  │ COM ── GND      │  │  │ VCC ── LM317    │  │
-    │  │ NO ── 5V        │  │  │ GND ── GND      │  │
-    │  └─────────────────┘  │  └─────────────────┘  │
+    │  │ MIN ── GPIO 27  │  │  │ HALL ── 10kΩ ── GPIO 26 │
+    │  │ MAX ── GPIO 17  │  │  │       └─ 3.3kΩ ── GND   │
+    │  │ COM ── GND      │  │  │ IND ── 10kΩ ── GPIO 22  │
+    │  │ NO ── 5V        │  │  │       └─ 3.3kΩ ── GND   │
+    │  └─────────────────┘  │  │ VCC ── LM317    │  │
+    │                       │  │ GND ── GND      │  │
+    │                       │  └─────────────────┘  │
     └───────────────────────┼───────────────────────┘
                             │
                     ⚡ COMMON GROUND ⚡
@@ -120,7 +126,7 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 ```
 DROK 48V Supply Outputs:
 ├── 48V ── CL57T Driver (Rotary Motor)
-├── 24V ── TB6600 Driver (Slider Motor) 
+├── 12V ── SERVO42C Driver (Slider Motor) 
 ├── 12V ── LM317 Regulator Input
 ├── 5V ── Raspberry Pi + Sensors
 └── GND ── Common Ground (ALL components)
@@ -133,11 +139,14 @@ DROK 48V Supply Outputs:
 - **Enable Logic**: LOW = enabled, HIGH = disabled
 - **Alarm Logic**: HIGH = OK, LOW = fault
 
-### **TB6600 Driver (Slider Motor) Configuration:**
-- **Power**: 24V from DROK supply  
-- **Microstepping**: 8x (1600 steps/revolution) - **UPDATED**
+### **MKS SERVO42C Driver (Slider Motor) Configuration:**
+- **Power**: 12V from DROK supply (reduced from 24V)
+- **Microstepping**: 4x (800 steps/revolution) - **BALANCED FOR 12V**
 - **Current**: Set for 1A motor (typically 0.8-1.0A)
 - **Enable Logic**: LOW = enabled, HIGH = disabled
+- **Alarm Logic**: HIGH = OK, LOW = fault/stall
+- **Max Pulse Rate**: 25kHz+ (reduced due to 12V supply)
+- **DIP Switch Settings**: MS1=OFF, MS2=ON, MS3=OFF (4x microstepping)
 
 ### **Sensor Power (LM317 Regulator):**
 ```
@@ -147,6 +156,21 @@ Components powered:
 ├── Hall Sensor (NJK-5002C)
 ├── Inductive Sensor (LJ12A3-4-Z/BX)
 └── Limit Switches (896F)
+```
+
+### **Sensor Signal Level Conversion (CRITICAL):**
+```
+⚠️  WARNING: Sensors output 12-24V, Pi GPIO max is 3.3V!
+
+Voltage Divider Circuit (for each sensor):
+Sensor Output (12-24V) ──┬── 10kΩ ──┬── GPIO Pin (3.3V)
+                         │          │
+                         └── 3.3kΩ ──┴── GND
+
+Components needed:
+├── 2x 10kΩ resistors (for Hall & Inductive sensors)
+├── 2x 3.3kΩ resistors (for Hall & Inductive sensors)
+└── 2x 0.1μF capacitors (optional - noise filtering)
 ```
 
 ### **896F Limit Switch Wiring:**
@@ -327,3 +351,33 @@ If issues persist after implementing these solutions:
 4. Implement optocoupler isolation as final solution
 
 **Remember**: Ground loops are the #1 cause of phantom limit switch triggers in stepper motor systems!
+
+---
+
+## 🚀 **MKS SERVO42C SPEED OPTIMIZATION**
+
+### **Speed Performance Comparison:**
+```
+Driver Type    |  Max Speed  |  Microstepping  |  Pulses/Rev  |  Speed Rating
+TB6600 (Old)   |  ~5kHz      |  8x (1600)      |  1600        |  ⭐⭐ SLOW
+SERVO42C (12V) |  25kHz+     |  4x (800)       |  800         |  ⭐⭐⭐⭐ HIGH
+SERVO42C (24V) |  50kHz+     |  2x (400)       |  400         |  ⭐⭐⭐⭐⭐ MAXIMUM
+```
+
+### **Recommended SERVO42C Settings (12V Supply):**
+1. **DIP Switches**: MS1=OFF, MS2=ON, MS3=OFF (4x microstepping)
+2. **Speed Settings**: 120-150 (optimized for 12V)
+3. **Acceleration**: 10-15 steps (balanced for 12V)
+4. **Power Supply**: 12V (current setup - good for most applications)
+
+### **Speed Testing Procedure (12V Supply):**
+1. Start with speed = 80, test slider movement
+2. Increase to 120, verify smooth operation
+3. Push to 150 for maximum speed (monitor for stalls)
+4. Adjust acceleration steps if needed (10-15 for 12V)
+
+### **Troubleshooting High Speed:**
+- **Stalls at high speed**: Increase power supply voltage or reduce microstepping
+- **Rough movement**: Increase microstepping (4x instead of 2x)
+- **Alarm triggers**: Check mechanical binding or reduce acceleration
+- **Position loss**: Verify closed-loop feedback is working

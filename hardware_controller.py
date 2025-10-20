@@ -26,6 +26,12 @@ class HardwareController:
         self.SLIDER_ENABLE_PIN = 25  # Enable pin for slider motor (ENA)
         self.SLIDER_ALM_PIN = 18     # Alarm output from slider driver (ALM)
         
+        # --- SERVO42C Configuration (12V Supply) ---
+        # SERVO42C with 12V supply - balanced performance
+        # Recommended: 4x microstepping (800 pulses/rev) for 12V operation
+        self.SLIDER_PULSES_PER_REV = 800  # 4x microstepping (optimized for 12V)
+        self.SLIDER_MAX_PULSE_RATE = 25000  # SERVO42C with 12V can handle 25kHz+
+        
         # --- ADDED: Slider motor limit switches ---
         # NOTE: Adjust these BCM pins to match wiring for the slider rail.
         self.SLIDER_MIN_PIN = 27
@@ -194,6 +200,14 @@ class HardwareController:
         # Optimized for CL57T driver - can handle very fast speeds
         return max(0.00001, 0.01 / (speed / 100.0))
     
+    def _servo42c_speed_to_delay(self, speed):
+        """Convert 0-200 speed to delay for SERVO42C (much faster than standard drivers)."""
+        if speed <= 0:
+            return 0.01  # Very slow if stopped
+        # SERVO42C can handle much faster pulse rates
+        # 200 = 0.0000001s (0.1μs), 100 = 0.000001s (1μs), 50 = 0.00001s (10μs)
+        return max(0.0000001, 0.01 / (speed / 100.0))
+    
     def _step_motor(self, delay):
         """Single step with given delay."""
         GPIO.output(self.STEP_PIN, GPIO.HIGH)
@@ -247,13 +261,13 @@ class HardwareController:
         print(f"Moving slider to MAX: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
         
         if ultra_fast:
-            # ULTRA-FAST MODE: Minimal acceleration, maximum speed
-            accel_phase = min(10, max_pulses // 50)  # 10 steps acceleration for 1600 pulses/rev
-            decel_phase = min(10, max_pulses // 50)  # 10 steps deceleration for 1600 pulses/rev
+            # ULTRA-FAST MODE: Minimal acceleration, maximum speed for SERVO42C (12V)
+            accel_phase = min(8, max_pulses // 80)  # 8 steps acceleration for SERVO42C 12V
+            decel_phase = min(8, max_pulses // 80)  # 8 steps deceleration for SERVO42C 12V
         else:
-            # OPTIMIZED for TB6600 (1600 pulses/rev) - adjusted for higher pulse count
-            accel_phase = min(accel_steps, max_pulses // 10)  # Use 1/10 for 1600 pulses/rev
-            decel_phase = min(decel_steps, max_pulses // 10)  # Use 1/10 for 1600 pulses/rev
+            # OPTIMIZED for SERVO42C (800 pulses/rev with 4x microstepping, 12V)
+            accel_phase = min(accel_steps, max_pulses // 15)  # Use 1/15 for SERVO42C 12V
+            decel_phase = min(decel_steps, max_pulses // 15)  # Use 1/15 for SERVO42C 12V
         
         cruise_phase = max(0, max_pulses - accel_phase - decel_phase)  # Ensure non-negative
         
@@ -328,13 +342,13 @@ class HardwareController:
         print(f"Moving slider to MIN: max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
         
         if ultra_fast:
-            # ULTRA-FAST MODE: Minimal acceleration, maximum speed
-            accel_phase = min(10, max_pulses // 50)  # 10 steps acceleration for 1600 pulses/rev
-            decel_phase = min(10, max_pulses // 50)  # 10 steps deceleration for 1600 pulses/rev
+            # ULTRA-FAST MODE: Minimal acceleration, maximum speed for SERVO42C (12V)
+            accel_phase = min(8, max_pulses // 80)  # 8 steps acceleration for SERVO42C 12V
+            decel_phase = min(8, max_pulses // 80)  # 8 steps deceleration for SERVO42C 12V
         else:
-            # OPTIMIZED for TB6600 (1600 pulses/rev) - adjusted for higher pulse count
-            accel_phase = min(accel_steps, max_pulses // 10)  # Use 1/10 for 1600 pulses/rev
-            decel_phase = min(decel_steps, max_pulses // 10)  # Use 1/10 for 1600 pulses/rev
+            # OPTIMIZED for SERVO42C (800 pulses/rev with 4x microstepping, 12V)
+            accel_phase = min(accel_steps, max_pulses // 15)  # Use 1/15 for SERVO42C 12V
+            decel_phase = min(decel_steps, max_pulses // 15)  # Use 1/15 for SERVO42C 12V
         
         cruise_phase = max(0, max_pulses - accel_phase - decel_phase)  # Ensure non-negative
         

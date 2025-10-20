@@ -24,11 +24,12 @@ def test_gpio_basic():
             'DIR_PIN': 21, 
             'ALM_PIN': 16,
             'HALL_PIN': 26,
-            'INDUCTIVE_PIN': 19,
-            'SLIDER_MIN_PIN': 13,
-            'SLIDER_MAX_PIN': 12,
+            'INDUCTIVE_PIN': 22,
+            'SLIDER_MIN_PIN': 27,
+            'SLIDER_MAX_PIN': 17,
             'SLIDER_STEP_PIN': 23,
-            'SLIDER_DIR_PIN': 24
+            'SLIDER_DIR_PIN': 24,
+            'SLIDER_ALM_PIN': 18
         }
         
         print("\n📌 Pin Configuration:")
@@ -48,9 +49,10 @@ def test_input_pins():
     input_pins = {
         'ALM_PIN': 16,
         'HALL_PIN': 26,
-        'INDUCTIVE_PIN': 19,
-        'SLIDER_MIN_PIN': 13,
-        'SLIDER_MAX_PIN': 12
+        'INDUCTIVE_PIN': 22,
+        'SLIDER_MIN_PIN': 27,
+        'SLIDER_MAX_PIN': 17,
+        'SLIDER_ALM_PIN': 18
     }
     
     try:
@@ -143,8 +145,9 @@ def test_sensor_reading():
     
     try:
         HALL_PIN = 26
-        INDUCTIVE_PIN = 19
+        INDUCTIVE_PIN = 22
         ALM_PIN = 16
+        SLIDER_ALM_PIN = 18
         
         print("Monitoring sensors for 10 seconds...")
         print("Press Ctrl+C to stop early")
@@ -154,10 +157,12 @@ def test_sensor_reading():
             hall_state = GPIO.input(HALL_PIN)
             inductive_state = GPIO.input(INDUCTIVE_PIN)
             alm_state = GPIO.input(ALM_PIN)
+            slider_alm_state = GPIO.input(SLIDER_ALM_PIN)
             
             print(f"\rHall: {'ACTIVE' if not hall_state else 'INACTIVE'} | "
                   f"Inductive: {'ACTIVE' if not inductive_state else 'INACTIVE'} | "
-                  f"Alarm: {'OK' if alm_state else 'STALL'}", end='', flush=True)
+                  f"Rotary Alarm: {'OK' if alm_state else 'STALL'} | "
+                  f"Slider Alarm: {'OK' if slider_alm_state else 'STALL'}", end='', flush=True)
             
             time.sleep(0.1)
         

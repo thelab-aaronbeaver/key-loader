@@ -30,10 +30,10 @@ def load_config():
     default_config = {
         "step_degrees": 36.0,
         "pause_seconds": 1.0,       # time to hold at position (seconds)
-        "slider_in_speed": 100,     # 0-100 speed scale (0=stopped, 100=fastest) - MAXIMUM SPEED
-        "slider_out_speed": 100,    # 0-100 speed scale (0=stopped, 100=fastest) - MAXIMUM SPEED
-        "slider_accel_steps": 20,   # steps for slider acceleration ramp-up - OPTIMIZED for TB6600 (1600 pulses/rev)
-        "slider_decel_steps": 20,   # steps for slider deceleration ramp-down - OPTIMIZED for TB6600 (1600 pulses/rev)
+        "slider_in_speed": 120,     # 0-200 speed scale (0=stopped, 200=ultra-extreme) - SERVO42C 12V OPTIMIZED
+        "slider_out_speed": 120,    # 0-200 speed scale (0=stopped, 200=ultra-extreme) - SERVO42C 12V OPTIMIZED
+        "slider_accel_steps": 15,   # steps for slider acceleration ramp-up - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
+        "slider_decel_steps": 15,   # steps for slider deceleration ramp-down - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
         "rotary_speed": 100,        # 0-100 speed scale for rotary motor - MAXIMUM SPEED
         "rotary_accel_steps": 50,   # steps for acceleration ramp-up - reduced for faster acceleration
         "rotary_decel_steps": 50,   # steps for deceleration ramp-down - reduced for faster deceleration
@@ -72,7 +72,7 @@ def speed_to_delay(speed):
     if speed <= 0:
         return 1.0  # Very slow if stopped
     # Convert to delay: 200 = 0.0000001s (0.1μs), 1 = 0.01s (inverse relationship)
-    # ULTRA-EXTREME SPEED for TB6600 driver - pushing beyond normal limits (up to 200%)
+    # ULTRA-EXTREME SPEED for SERVO42C driver (12V) - much faster than TB6600
     return max(0.0000001, 0.01 / (speed / 100.0))
 
 def send_pico_command(command):
