@@ -209,7 +209,7 @@ def start_cycle():
             
             # Move slider to OUT limit switch
             app_state["system_message"] = f"Slider at IN. Moving to OUT position..."
-            ultra_fast = config['slider_out_speed'] > 150
+            ultra_fast = config['slider_out_speed'] > 75
             out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
             
             if not out_ok:
@@ -320,7 +320,7 @@ def api_slider_test_cycle():
         
         # Step 1: Move to MIN limit switch
         app_state["system_message"] = "Moving slider to MIN position..."
-        ultra_fast = config['slider_in_speed'] > 150
+        ultra_fast = config['slider_in_speed'] > 75
         min_success = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
         
         if not min_success:
@@ -329,7 +329,7 @@ def api_slider_test_cycle():
         
         # Step 2: Move to MAX limit switch
         app_state["system_message"] = "Moving slider to MAX position..."
-        ultra_fast = config['slider_out_speed'] > 150
+        ultra_fast = config['slider_out_speed'] > 75
         max_success = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
         
         if not max_success:
@@ -338,7 +338,7 @@ def api_slider_test_cycle():
         
         # Step 3: Return to MIN limit switch
         app_state["system_message"] = "Returning slider to MIN position..."
-        ultra_fast = config['slider_in_speed'] > 150
+        ultra_fast = config['slider_in_speed'] > 75
         return_success = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
         
         if not return_success:
