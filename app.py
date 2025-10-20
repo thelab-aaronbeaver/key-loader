@@ -73,7 +73,8 @@ def speed_to_delay(speed):
         return 1.0  # Very slow if stopped
     # Convert to delay: 200 = 0.0000001s (0.1μs), 1 = 0.01s (inverse relationship)
     # ULTRA-EXTREME SPEED for SERVO42C driver (12V) - much faster than TB6600
-    return max(0.0000001, 0.01 / (speed / 100.0))
+    return max(0.000001, 0.1 / (speed / 100.0))
+    #return max(0.0000001, 0.01 / (speed / 100.0))
 
 def send_pico_command(command):
     #"""Send command to Raspberry Pico. TODO: Implement actual communication."""
