@@ -201,12 +201,12 @@ class HardwareController:
         return max(0.00001, 0.01 / (speed / 100.0))
     
     def _servo42c_speed_to_delay(self, speed):
-        """Convert 0-200 speed to delay for SERVO42C (much faster than standard drivers)."""
+        """Convert 0-200 speed to delay for SERVO42C (750 RPM maximum)."""
         if speed <= 0:
             return 0.01  # Very slow if stopped
-        # SERVO42C can handle much faster pulse rates
-        # 200 = 0.0000001s (0.1μs), 100 = 0.000001s (1μs), 50 = 0.00001s (10μs)
-        return max(0.0000001, 0.01 / (speed / 100.0))
+        # SERVO42C optimized for 750 RPM maximum
+        # 200 = 0.0001s (0.1ms) = 750 RPM, 100 = 0.0002s (0.2ms) = 375 RPM
+        return max(0.0001, 0.0002 / (speed / 100.0))
     
     def _step_motor(self, delay):
         """Single step with given delay."""

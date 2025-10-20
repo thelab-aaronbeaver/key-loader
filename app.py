@@ -68,13 +68,12 @@ def save_config(config_dict):
 config = load_config()
 
 def speed_to_delay(speed):
-    """Convert 0-200 speed to delay in seconds. 0=stopped, 200=ultra-extreme speed."""
+    """Convert 0-200 speed to delay in seconds. 0=stopped, 200=750 RPM maximum."""
     if speed <= 0:
         return 1.0  # Very slow if stopped
-    # Convert to delay: 200 = 0.0000001s (0.1μs), 1 = 0.01s (inverse relationship)
-    # ULTRA-EXTREME SPEED for SERVO42C driver (12V) - much faster than TB6600
-    return max(0.000000001, 0.001 / (speed / 100.0))
-    #return max(0.0000001, 0.01 / (speed / 100.0))
+    # Convert to delay: 200 = 0.0001s (0.1ms) = 750 RPM, 1 = 0.02s (inverse relationship)
+    # OPTIMIZED for SERVO42C driver (12V) - 750 RPM maximum
+    return max(0.0001, 0.0002 / (speed / 100.0))
 
 def send_pico_command(command):
     #"""Send command to Raspberry Pico. TODO: Implement actual communication."""
