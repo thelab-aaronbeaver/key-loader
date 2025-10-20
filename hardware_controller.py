@@ -20,10 +20,11 @@ class HardwareController:
         self.HOME_SWITCH_PIN = 5  # Optional legacy home switch (not required if using hall)
         self.END_SWITCH_PIN = 6   # Optional second switch
 
-        # --- ADDED: Slider motor control pins ---
+        # --- ADDED: Slider motor control pins (MKS SERVO42C) ---
         self.SLIDER_STEP_PIN = 23
         self.SLIDER_DIR_PIN = 24
-        self.SLIDER_ENABLE_PIN = 25  # Enable pin for slider motor
+        self.SLIDER_ENABLE_PIN = 25  # Enable pin for slider motor (ENA)
+        self.SLIDER_ALM_PIN = 18     # Alarm output from slider driver (ALM)
         
         # --- ADDED: Slider motor limit switches ---
         # NOTE: Adjust these BCM pins to match wiring for the slider rail.
@@ -63,12 +64,13 @@ class HardwareController:
         GPIO.setup(self.SLIDER_STEP_PIN, GPIO.OUT)
         GPIO.setup(self.SLIDER_DIR_PIN, GPIO.OUT)
         GPIO.setup(self.SLIDER_ENABLE_PIN, GPIO.OUT)
+        GPIO.setup(self.SLIDER_ALM_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         
         # Initialize enable pins (motors disabled by default)
         GPIO.output(self.ENABLE_PIN, GPIO.HIGH)  # HIGH = disabled for most drivers
         GPIO.output(self.SLIDER_ENABLE_PIN, GPIO.HIGH)  # HIGH = disabled for most drivers
         
-        print("✅ Hardware Controller Initialized with Enable Pins and Limit Switches")
+        print("✅ Hardware Controller Initialized with Enable Pins, Limit Switches, and Slider Alarm")
 
     # --- ADDED: Enable pin control methods ---
     def enable_rotary_motor(self, enabled=True):
@@ -85,6 +87,11 @@ class HardwareController:
         GPIO.output(self.SLIDER_ENABLE_PIN, GPIO.LOW if enabled else GPIO.HIGH)
         status = "enabled" if enabled else "disabled"
         print(f"Slider motor {status}")
+
+    def read_slider_alarm(self):
+        """Return True if the slider driver reports a fault/stall (ALM active)."""
+        # Most drivers expose ALM as active-low (LOW = fault). Adjust if needed.
+        return GPIO.input(self.SLIDER_ALM_PIN) == GPIO.LOW
 
     # --- MODIFIED: Homing Method (use hall sensor for home detection) ---
     def home_table(self):
@@ -254,8 +261,11 @@ class HardwareController:
         
         step_count = 0
         
-        # Acceleration phase (very short for TB6600)
+        # Acceleration phase (short for SERVO42C)
         for i in range(accel_phase):
+            if self.read_slider_alarm():
+                print("🛑 ERROR: Slider driver alarm during accel phase")
+                return False
             if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (accel phase)")
                 return True
@@ -267,8 +277,11 @@ class HardwareController:
             time.sleep(delay)
             step_count += 1
         
-        # Cruise phase (most of the movement for TB6600)
+        # Cruise phase
         for _ in range(cruise_phase):
+            if self.read_slider_alarm():
+                print("🛑 ERROR: Slider driver alarm during cruise phase")
+                return False
             if ultra_fast:
                 # ULTRA-FAST: Use non-debounced reading for maximum speed
                 if self.read_slider_max():
@@ -285,8 +298,11 @@ class HardwareController:
             time.sleep(speed_delay)
             step_count += 1
         
-        # Deceleration phase (very short for TB6600)
+        # Deceleration phase (short for SERVO42C)
         for i in range(decel_phase):
+            if self.read_slider_alarm():
+                print("🛑 ERROR: Slider driver alarm during decel phase")
+                return False
             if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (decel phase)")
                 return True
@@ -326,8 +342,11 @@ class HardwareController:
         
         step_count = 0
         
-        # Acceleration phase (very short for TB6600)
+        # Acceleration phase (short for SERVO42C)
         for i in range(accel_phase):
+            if self.read_slider_alarm():
+                print("🛑 ERROR: Slider driver alarm during accel phase")
+                return False
             if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (accel phase)")
                 return True
@@ -339,8 +358,11 @@ class HardwareController:
             time.sleep(delay)
             step_count += 1
         
-        # Cruise phase (most of the movement for TB6600)
+        # Cruise phase
         for _ in range(cruise_phase):
+            if self.read_slider_alarm():
+                print("🛑 ERROR: Slider driver alarm during cruise phase")
+                return False
             if ultra_fast:
                 # ULTRA-FAST: Use non-debounced reading for maximum speed
                 if self.read_slider_min():
@@ -357,8 +379,11 @@ class HardwareController:
             time.sleep(speed_delay)
             step_count += 1
         
-        # Deceleration phase (very short for TB6600)
+        # Deceleration phase (short for SERVO42C)
         for i in range(decel_phase):
+            if self.read_slider_alarm():
+                print("🛑 ERROR: Slider driver alarm during decel phase")
+                return False
             if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (decel phase)")
                 return True
