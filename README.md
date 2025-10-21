@@ -68,27 +68,31 @@ This system automates the process of detecting keys on a rotating table and trig
 The main processing cycle follows this sequence:
 
 ```
+Start State:
+0. Check hall sensor at 0° position
+1. Position slider to OUT (MAX) limit switch
+
 For each cycle step:
 1. Move rotary motor by configured step degrees
 2. Verify position with hall sensor
 3. Check inductive sensor for key presence
 4. If key detected:
-   a. Send trigger command to Raspberry Pico
-   b. Move slider to IN limit switch
-   c. Move slider to OUT limit switch
-   d. Wait for configured pause time
-   e. Continue to next position
+   a. Send trigger command to Raspberry Pico (emulate keyboard Enter)
+   b. Simultaneously: Wait for configured pause time AND move slider to IN (MIN) limit switch
+   c. Move slider to OUT (MAX) limit switch
+   d. Continue to next position
 5. If no key: Continue to next position
 6. Repeat for configured number of cycles
 ```
 
 ### 4. Key Detection Process
 When a key is detected:
-1. **Trigger Pico**: Send command to external Raspberry Pico
-2. **Slider IN**: Move slider to inward limit switch
-3. **Slider OUT**: Move slider to outward limit switch
-4. **Pause**: Wait for poles timer (configurable duration)
-5. **Continue**: Proceed to next rotary position
+1. **Trigger Pico**: Send GPIO pulse to emulate keyboard Enter press
+2. **Simultaneous Operations**: 
+   - **Pause**: Wait for processing timer (configurable duration)
+   - **Slider IN**: Move slider to inward limit switch (MIN position)
+3. **Slider OUT**: Move slider to outward limit switch (MAX position)
+4. **Continue**: Proceed to next rotary position
 
 ## Configuration
 

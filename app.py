@@ -19,7 +19,10 @@ app_state = {
     "inductive_status": False,
     # --- ADDED: Slider limit switch states ---
     "slider_min": False,
-    "slider_max": False
+    "slider_max": False,
+    # --- ADDED: Cycle progress tracking ---
+    "current_cycle": 0,
+    "total_cycles": 0
 }
 
 # --- ADDED: Runtime configuration with JSON persistence ---
@@ -70,10 +73,10 @@ config = load_config()
 # REMOVED: speed_to_delay() function - now handled by SERVO42C-specific function in hardware_controller.py
 
 def send_pico_command(command):
-    """Send command to Raspberry Pico via GPIO trigger pulse."""
-    print(f"📡 Sending to Pico: {command}")
+    """Send command to Raspberry Pico via GPIO trigger pulse to emulate keyboard press."""
+    print(f"📡 Sending to Pico: {command} (emulating keyboard Enter press)")
     
-    # Trigger Pico via GPIO pin (100ms pulse)
+    # Trigger Pico via GPIO pin (100ms pulse) to emulate keyboard Enter
     hw.trigger_pico(duration_ms=100)
 
 @app.route('/')
@@ -157,11 +160,39 @@ def start_cycle():
 
     app_state["is_running"] = True
     app_state["current_angle"] = 0
+    app_state["current_cycle"] = 0
+    app_state["total_cycles"] = total_cycles
+
+    # --- UPDATED: Start State - Check hall sensor and position slider OUT ---
+    app_state["system_message"] = "Starting cycle - checking initial position..."
+    
+    # Check hall sensor at start position
+    is_hall_active = hw.read_hall_sensor()
+    if not is_hall_active:
+        app_state["system_message"] = "ERROR: Hall sensor not active at start position (0°)!"
+        app_state["is_running"] = False
+        return jsonify({"error": "Hall sensor not active at start position"}), 400
+    
+    # Position slider to OUT (MAX) limit switch at start
+    app_state["system_message"] = "Positioning slider to OUT (MAX) position..."
+    accel_steps = config.get('slider_accel_steps', 15)
+    decel_steps = config.get('slider_decel_steps', 15)
+    ultra_fast = config['slider_out_speed'] > 75
+    out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+    
+    if not out_ok:
+        app_state["system_message"] = "ERROR: Slider failed to reach OUT limit switch at start."
+        app_state["is_running"] = False
+        return jsonify({"error": "Slider failed to reach OUT limit switch at start"}), 400
+    
+    app_state["system_message"] = "Start state complete. Beginning cycle positions..."
 
     for i in range(1, total_cycles + 1):
         target_angle = (i * config['step_degrees']) % 360
-        app_state["system_message"] = f"Moving to position {i} ({target_angle}°)..."
+        app_state["current_cycle"] = i
+        app_state["system_message"] = f"Moving to position {i} of {total_cycles} ({target_angle}°)..."
         
+        # --- UPDATED: Move Rotary Motor with improved error handling ---
         move_success = hw.move_degrees(
             config['step_degrees'], 
             speed=config['rotary_speed'],
@@ -169,39 +200,45 @@ def start_cycle():
             decel_steps=config['rotary_decel_steps']
         )
         if not move_success:
-            app_state["system_message"] = "ERROR: Motor stalled during movement!"
+            app_state["system_message"] = "ERROR: Motor stalled during movement! Pausing motor and stopping cycle."
+            # Disable motor on stall
+            hw.enable_rotary_motor(False)
             break 
         
         app_state["current_angle"] = target_angle
         time.sleep(0.2)
 
+        # --- UPDATED: Position Verification / Key Detection ---
         is_hall_active = hw.read_hall_sensor()
         if not is_hall_active:
-            app_state["system_message"] = f"ERROR: Position mismatch at {target_angle}°!"
+            app_state["system_message"] = f"ERROR: Position mismatch at {target_angle}°! Hall sensor not active."
             break
 
         if hw.read_inductive_sensor():
-            app_state["system_message"] = f"✅ Key detected at {target_angle}°. Triggering."
+            app_state["system_message"] = f"✅ Key detected at position {i} of {total_cycles} ({target_angle}°). Processing key..."
             
-            # Send command to Pico to start poles timer
-            # TODO: Implement actual Pico communication (serial/USB)
-            send_pico_command("trigger_function")
+            # --- UPDATED: Key Processing Sequence ---
+            # 1. Trigger Pico: Send GPIO pulse to emulate keyboard Enter press
+            send_pico_command("keyboard_enter")
             
-            # Start slider movement sequence: IN → OUT
-            accel_steps = config.get('slider_accel_steps', 15)
-            decel_steps = config.get('slider_decel_steps', 15)
+            # 2. & 3. Simultaneous: Pause timer AND Slider IN movement
+            pause_time = max(config['pause_seconds'], 0)
+            app_state["system_message"] = f"Key detected. Starting pause timer ({pause_time:.1f}s) and moving slider to IN (MIN) position simultaneously..."
             
-            # Move slider to IN limit switch first
-            app_state["system_message"] = f"Key detected. Moving slider to IN position..."
+            # Start slider IN movement and pause timer at the same time
             ultra_fast = config['slider_in_speed'] > 75
             in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+            
+            # Wait for the remaining pause time if slider finished before pause timer
+            if pause_time > 0:
+                time.sleep(pause_time)
             
             if not in_ok:
                 app_state["system_message"] = "ERROR: Slider failed to reach IN limit switch."
                 break
             
-            # Move slider to OUT limit switch
-            app_state["system_message"] = f"Slider at IN. Moving to OUT position..."
+            # 4. Slider OUT: Move slider to outward limit switch (MAX position)
+            app_state["system_message"] = f"Slider at IN. Moving to OUT (MAX) position..."
             ultra_fast = config['slider_out_speed'] > 75
             out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
             
@@ -209,19 +246,16 @@ def start_cycle():
                 app_state["system_message"] = "ERROR: Slider failed to reach OUT limit switch."
                 break
             
-            # Wait for pause timer to complete
-            pause_time = max(config['pause_seconds'], 0)
-            app_state["system_message"] = f"Slider at OUT. Waiting {pause_time:.1f}s for poles timer..."
-            time.sleep(pause_time)
-            
-            app_state["system_message"] = f"Poles timer complete. Ready for next position."
+            app_state["system_message"] = f"Key processing complete at position {i} of {total_cycles} ({target_angle}°). Ready for next position."
         else:
-            app_state["system_message"] = f"No key at {target_angle}°. Moving on."
+            app_state["system_message"] = f"No key at position {i} of {total_cycles} ({target_angle}°). Moving on."
 
     if app_state["is_running"]:
-        app_state["system_message"] = "Cycle complete. Ready."
+        app_state["system_message"] = f"Cycle complete. Processed {total_cycles} positions. Ready."
         
     app_state["is_running"] = False
+    app_state["current_cycle"] = 0
+    app_state["total_cycles"] = 0
     return jsonify({"message": "Cycle finished."})
 
 @app.route('/api/status')

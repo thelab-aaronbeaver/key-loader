@@ -6,93 +6,126 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Configuration</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="C:/Users/elwoo/KeyLoader/key-loader/static/style.css">
 </head>
 
 <body>
     <div class="container">
-        <h1>Configuration</h1>
-        <div><a href="/">← Back to Control</a></div>
+        <div class="header">
+            <h1>Configuration</h1>
+            <div><a href="/">← Back to Control</a></div>
+        </div>
+        
 
         <div class="card">
-            <h2>Rotary Motor</h2>
-            <div class="row">
-                <button id="btn-home" class="btn-home">1. Move Home</button>
-                <button id="btn-set-zero" class="btn-back">2. Set Zero</button>
-                <label for="degrees">Move Degrees</label>
-                <input id="degrees" type="number" step="1" value="36">
-                <button id="btn-move-fwd" class="btn-move">Move +</button>
-                <button id="btn-move-bwd" class="btn-back">Move -</button>
-
+            <h2>Sensors</h2>
+            <div class="flex-container">
+                <div class="flex-item">Home<span id="hall" class="indicator_config"></span></div>
+                <div class="flex-item"><span class="divider"></span></div>
+                <div class="flex-item">Key<span id="inductive" class="indicator_config"></span></div>
+                <div class="flex-item"><span class="divider"></span></div>                          
+                <div class="flex-item">Slider IN <span id="smin" class="indicator_config"></span></div>
+                <div class="flex-item"><span class="divider"></span></div>
+                <div class="flex-item">Slider OUT <span id="smax" class="indicator_config"></span></div>
+                <div class="flex-item"><span class="divider"></span></div>
+                <div class="flex-item">Slider Status <span id="slider-status" class="status-text">Ready</span></div>
+                <div class="flex-item"><span class="divider"></span></div>
+                <div class="flex-item">Pico Status <span id="pico-status" class="status-text">Ready</span></div>
             </div>
         </div>
 
         <div class="card">
-            <h2>Slider Motor Test</h2>
-            <div class="row">
-                <button id="btn-slider-test" class="btn-move">Test Slider Cycle</button>
-                <span id="slider-status" class="status-text">Ready</span>
+            <div class="flex-container">
+                <div class="flex-item">
+                    <h2>Rotary Motor</h2>
+                    <div class="row">
+                        <button id="btn-home" class="btn-home">Move Home</button>
+                        <button id="btn-set-zero" class="btn-back">Set Zero</button>
+                    </div>
+                    <div class="row">
+                        <label for="degrees">Move Degrees</label>
+                        <input id="degrees" type="number" step="1" value="36">
+                    </div>
+                    <div class="row">
+                        <button id="btn-move-fwd" class="btn-move">Move +</button>
+                        <button id="btn-move-bwd" class="btn-back">Move -</button>
+                    </div>
+                </div>
+                <div class="flex-item"><span class="divider"></span></div>
+                <div class="flex-item">
+                    <h2>Slider Motor Test</h2>
+                    <div class="row">
+                        <button id="btn-slider-test" class="btn-move">Test Slider Cycle</button>
+                    </div>
+                    <div class="row">
+                        <div class="tooltip">Details
+                            <span class="tooltiptext">This will move slider from MIN → MAX → MIN once (full cycle
+                                test)</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex-item"><span class="divider"></span></div>
+                <div class="flex-item">
+                    <h2>Pico Keyboard Test</h2>
+                    <div class="row">
+                        <button id="btn-pico-test" class="btn-move">Test Pico Trigger</button>
+                    </div>
+                    <div class="row">
+                        <div class="tooltip">Details
+                            <span class="tooltiptext">This will send a trigger pulse to the Raspberry Pico (GPIO 4).
+                                <br> Pico should press Enter key if properly connected and configured</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="row">
-                <div class="info-text">This will move slider from MIN → MAX → MIN once</div>
-            </div>
+
         </div>
 
-        <div class="card">
-            <h2>Pico Keyboard Test</h2>
-            <div class="row">
-                <button id="btn-pico-test" class="btn-move">Test Pico Trigger</button>
-                <span id="pico-status" class="status-text">Ready</span>
-            </div>
-            <div class="row">
-                <div class="info-text">This will send a trigger pulse to the Raspberry Pico (GPIO 4)</div>
-            </div>
-            <div class="row">
-                <div class="info-text">The Pico should press Enter key if properly connected and configured</div>
-            </div>
-        </div>
+
+
+
 
         <div class="card">
             <h2>Process Settings</h2>
             <div class="row">
                 <label for="step_degrees">Step Degrees</label>
                 <input id="step_degrees" type="number" step="1" value="36">
-                <label for="pause_seconds">Pause (seconds)</label>
+                <label for="cycles">Total Cycles</label>
+                <input id="cycles" type="number" min="1" step="1" value="10">
+            </div>
+            <div class="row">
+                <label for="pause_seconds">Pause Timer</label>
                 <input id="pause_seconds" type="number" step="0.1" value="1.0">
+                <div class="info-text">Runs simultaneously with slider IN movement</div>
             </div>
             <div class="row">
                 <label for="rotary_speed">Rotary Speed </label>
                 <input id="rotary_speed" type="number" min="0" max="100" step="1" value="100">
+            </div>
+            <div class="row">
                 <label for="rotary_accel_steps">Rotary Accel Steps</label>
                 <input id="rotary_accel_steps" type="number" min="1" step="1" value="50">
-            </div>
-            <div class="row">
                 <label for="rotary_decel_steps">Rotary Decel Steps</label>
                 <input id="rotary_decel_steps" type="number" min="1" step="1" value="50">
+            </div>
+            <div class="row">
                 <label for="slider_in_speed">Slider In Speed</label>
                 <input id="slider_in_speed" type="number" min="0" max="100" step="1" value="80">
-            </div>
-            <div class="row">
                 <label for="slider_out_speed">Slider Out Speed</label>
                 <input id="slider_out_speed" type="number" min="0" max="100" step="1" value="80">
-                <label for="slider_accel_steps">Slider Accel Steps</label>
-                <input id="slider_accel_steps" type="number" min="1" step="1" value="15">
             </div>
             <div class="row">
+                <label for="slider_accel_steps">Slider Accel Steps</label>
+                <input id="slider_accel_steps" type="number" min="1" step="1" value="15">
                 <label for="slider_decel_steps">Slider Decel Steps</label>
                 <input id="slider_decel_steps" type="number" min="1" step="1" value="15">
+            </div>
+            <div class="row">
+
                 <button id="btn-save-config" class="btn-move">Save</button>
             </div>
         </div>
 
-        <div class="card">
-            <h2>Sensors</h2>
-            <div class="row">
-                <div>Home Switch <span id="hall" class="indicator"></span></div>
-                <div>Key <span id="inductive" class="indicator"></span></div>
-                <div>Slider IN <span id="smin" class="indicator"></span></div>
-                <div>Slider OUT <span id="smax" class="indicator"></span></div>
-            </div>
-        </div>
 
         <div class="card">
             <h2>System</h2>

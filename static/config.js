@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const msg = document.getElementById('msg');
     // Config inputs
     const inpStepDeg = document.getElementById('step_degrees');
+    const inpCycles = document.getElementById('cycles');
     const inpPause = document.getElementById('pause_seconds');
     const inpRotarySpeed = document.getElementById('rotary_speed');
     const inpRotaryAccel = document.getElementById('rotary_accel_steps');
@@ -167,6 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/config');
             const cfg = await res.json();
             inpStepDeg.value = cfg.step_degrees;
+            inpCycles.value = cfg.cycles || 10;
             inpPause.value = cfg.pause_seconds;
             inpRotarySpeed.value = cfg.rotary_speed;
             inpRotaryAccel.value = cfg.rotary_accel_steps;
@@ -188,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     step_degrees: parseFloat(inpStepDeg.value),
+                    cycles: parseInt(inpCycles.value, 10),
                     pause_seconds: parseFloat(inpPause.value),
                     rotary_speed: parseInt(inpRotarySpeed.value, 10),
                     rotary_accel_steps: parseInt(inpRotaryAccel.value, 10),
