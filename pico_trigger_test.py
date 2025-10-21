@@ -7,7 +7,7 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 
 # Set up GPIO 4 as an output pin
-TRIGGER_PIN = 4
+TRIGGER_PIN = 5
 GPIO.setup(TRIGGER_PIN, GPIO.OUT)
 
 def send_trigger():
