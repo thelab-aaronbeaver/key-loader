@@ -487,21 +487,45 @@ def emergency_stop_reset():
 
 @app.route('/api/start', methods=['POST'])
 def start_cycle():
-    # --- MODIFIED: Check for emergency stop state ---
-    current_state = safe_get_app_state()
-    if current_state["emergency_stop"]:
-        return jsonify({"error": "Emergency stop is active. Reset emergency stop before starting cycle."}), 400
-    
-    # --- MODIFIED: Check for homing status before starting ---
-    if not current_state["is_homed"]:
-        return jsonify({"error": "Machine must be homed before starting a cycle."}), 400
-    
-    if current_state["is_running"]:
-        return jsonify({"error": "Cycle is already running."}), 400
-    
-    # Allow overriding cycles in request
-    data = request.get_json(silent=True) or {}
-    total_cycles = int(data.get('cycles', config.get('cycles', 10)))
+    try:
+        # --- MODIFIED: Check for emergency stop state ---
+        current_state = safe_get_app_state()
+        
+        # Debug: Print current state for troubleshooting
+        print(f"Start cycle request - Current state: {current_state}")
+        
+        if current_state["emergency_stop"]:
+            print("ERROR: Emergency stop is active")
+            return jsonify({"error": "Emergency stop is active. Reset emergency stop before starting cycle."}), 400
+        
+        # --- MODIFIED: Check for homing status before starting ---
+        if not current_state["is_homed"]:
+            print("ERROR: Machine is not homed")
+            return jsonify({"error": "Machine must be homed before starting a cycle."}), 400
+        
+        if current_state["is_running"]:
+            print("ERROR: Cycle is already running")
+            return jsonify({"error": "Cycle is already running."}), 400
+        
+        # Allow overriding cycles in request
+        data = request.get_json(silent=True) or {}
+        print(f"Start cycle request data: {data}")
+        
+        # Validate cycles parameter
+        try:
+            total_cycles = int(data.get('cycles', config.get('cycles', 10)))
+            if total_cycles <= 0:
+                print("ERROR: Invalid cycles value")
+                return jsonify({"error": "Cycles must be a positive integer."}), 400
+        except (ValueError, TypeError):
+            print("ERROR: Invalid cycles parameter")
+            return jsonify({"error": "Invalid cycles parameter. Must be a positive integer."}), 400
+            
+        print(f"Total cycles to run: {total_cycles}")
+        
+    except Exception as e:
+        print(f"ERROR in start_cycle validation: {e}")
+        return jsonify({"error": f"Internal error: {str(e)}"}), 500
 
     # Set up cycle state
     safe_update_app_state({

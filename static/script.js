@@ -46,9 +46,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const cyclesInput = document.getElementById('cycles');
                 const cycles = cyclesInput ? parseInt(cyclesInput.value, 10) || 1 : 1;
+                console.log('Starting cycle with cycles:', cycles);
                 try {
-                    await fetch('/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cycles }) });
+                    const response = await fetch('/api/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ cycles })
+                    });
+                    console.log('Start cycle response status:', response.status);
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error('Start cycle error:', errorData);
+                    }
                 } catch (e) {
+                    console.error('Start cycle fetch error:', e);
                     // no-op; errors reflected via /api/status polling
                 }
             } else {
