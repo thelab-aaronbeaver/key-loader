@@ -22,7 +22,9 @@ app_state = {
     "slider_max": False,
     # --- ADDED: Cycle progress tracking ---
     "current_cycle": 0,
-    "total_cycles": 0
+    "total_cycles": 0,
+    # --- ADDED: Fine-tuned home position ---
+    "home_offset": 0.0  # Fine adjustment from hall sensor position
 }
 
 # --- ADDED: Runtime configuration with JSON persistence ---
@@ -131,9 +133,24 @@ def home_machine():
     app_state["is_running"] = True
     app_state["system_message"] = "Homing in progress..."
     
+    # First, home to hall sensor position
     success = hw.home_table()
     
     if success:
+        # Apply fine-tuned home offset if it exists
+        if app_state["home_offset"] != 0.0:
+            app_state["system_message"] = f"Applying fine adjustment of {app_state['home_offset']:.1f}°..."
+            move_success = hw.move_degrees(
+                app_state["home_offset"], 
+                speed=config['rotary_speed'],
+                accel_steps=config['rotary_accel_steps'],
+                decel_steps=config['rotary_decel_steps']
+            )
+            if not move_success:
+                app_state["system_message"] = "ERROR: Fine adjustment failed. Motor stalled."
+                app_state["is_running"] = False
+                return jsonify({"success": False})
+        
         app_state["is_homed"] = True
         app_state["current_angle"] = 0
         app_state["system_message"] = "Homing successful. Ready to start cycle."
@@ -164,7 +181,7 @@ def start_cycle():
     app_state["total_cycles"] = total_cycles
 
     # --- UPDATED: Start State - Check hall sensor and position slider OUT ---
-    app_state["system_message"] = "Starting cycle - checking initial position..."
+    app_state["system_message"] = "Starting key-driven cycle - checking initial position..."
     
     # Check hall sensor at start position
     is_hall_active = hw.read_hall_sensor()
@@ -185,73 +202,95 @@ def start_cycle():
         app_state["is_running"] = False
         return jsonify({"error": "Slider failed to reach OUT limit switch at start"}), 400
     
-    app_state["system_message"] = "Start state complete. Beginning cycle positions..."
+    app_state["system_message"] = "Start state complete. Beginning key detection cycle..."
 
-    for i in range(1, total_cycles + 1):
-        target_angle = (i * config['step_degrees']) % 360
-        app_state["current_cycle"] = i
-        app_state["system_message"] = f"Moving to position {i} of {total_cycles} ({target_angle}°)..."
+    # --- UPDATED: Key-driven cycle loop ---
+    keys_processed = 0
+    current_position = 0
+    
+    while keys_processed < total_cycles and app_state["is_running"]:
+        current_position += 1
+        app_state["current_cycle"] = current_position
+        target_angle = (current_position * config['step_degrees']) % 360
         
-        # --- UPDATED: Move Rotary Motor with improved error handling ---
-        move_success = hw.move_degrees(
-            config['step_degrees'], 
-            speed=config['rotary_speed'],
-            accel_steps=config['rotary_accel_steps'],
-            decel_steps=config['rotary_decel_steps']
-        )
-        if not move_success:
-            app_state["system_message"] = "ERROR: Motor stalled during movement! Pausing motor and stopping cycle."
-            # Disable motor on stall
-            hw.enable_rotary_motor(False)
-            break 
+        # Step 1: Key Detection with Proximity Switch
+        app_state["system_message"] = f"Searching for key at position {current_position} of {total_cycles} ({target_angle}°)..."
         
-        app_state["current_angle"] = target_angle
-        time.sleep(0.2)
-
-        # --- UPDATED: Position Verification / Key Detection ---
-        is_hall_active = hw.read_hall_sensor()
-        if not is_hall_active:
-            app_state["system_message"] = f"ERROR: Position mismatch at {target_angle}°! Hall sensor not active."
-            break
-
         if hw.read_inductive_sensor():
-            app_state["system_message"] = f"✅ Key detected at position {i} of {total_cycles} ({target_angle}°). Processing key..."
+            # Key detected - process it
+            keys_processed += 1
+            app_state["system_message"] = f"✅ Key detected at position {current_position} of {total_cycles} ({target_angle}°). Processing key {keys_processed} of {total_cycles}..."
             
-            # --- UPDATED: Key Processing Sequence ---
-            # 1. Trigger Pico: Send GPIO pulse to emulate keyboard Enter press
+            # Step 2: Simultaneous Operations
+            # - Trigger Pico
             send_pico_command("keyboard_enter")
             
-            # 2. & 3. Simultaneous: Pause timer AND Slider IN movement
-            pause_time = max(config['pause_seconds'], 0)
-            app_state["system_message"] = f"Key detected. Starting pause timer ({pause_time:.1f}s) and moving slider to IN (MIN) position simultaneously..."
-            
-            # Start slider IN movement and pause timer at the same time
+            # - Move slider from MAX to MIN
+            app_state["system_message"] = f"Processing key {keys_processed} of {total_cycles}. Moving slider to MIN position..."
             ultra_fast = config['slider_in_speed'] > 75
             in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
             
-            # Wait for the remaining pause time if slider finished before pause timer
-            if pause_time > 0:
-                time.sleep(pause_time)
-            
             if not in_ok:
-                app_state["system_message"] = "ERROR: Slider failed to reach IN limit switch."
+                app_state["system_message"] = "ERROR: Slider failed to reach MIN limit switch."
                 break
             
-            # 4. Slider OUT: Move slider to outward limit switch (MAX position)
-            app_state["system_message"] = f"Slider at IN. Moving to OUT (MAX) position..."
+            # - Move slider from MIN back to MAX
+            app_state["system_message"] = f"Key {keys_processed} of {total_cycles}. Moving slider back to MAX position..."
             ultra_fast = config['slider_out_speed'] > 75
             out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
             
             if not out_ok:
-                app_state["system_message"] = "ERROR: Slider failed to reach OUT limit switch."
+                app_state["system_message"] = "ERROR: Slider failed to reach MAX limit switch."
                 break
             
-            app_state["system_message"] = f"Key processing complete at position {i} of {total_cycles} ({target_angle}°). Ready for next position."
+            # - Start pause timer
+            pause_time = max(config['pause_seconds'], 0)
+            app_state["system_message"] = f"Key {keys_processed} of {total_cycles} processed. Waiting {pause_time:.1f}s pause timer..."
+            time.sleep(pause_time)
+            
+            app_state["system_message"] = f"Key {keys_processed} of {total_cycles} complete. Ready for next position."
+            
         else:
-            app_state["system_message"] = f"No key at position {i} of {total_cycles} ({target_angle}°). Moving on."
+            # No key detected - move to next position
+            app_state["system_message"] = f"No key at position {current_position} of {total_cycles} ({target_angle}°). Moving to next position..."
+            
+            # Move rotary motor by step degrees
+            move_success = hw.move_degrees(
+                config['step_degrees'], 
+                speed=config['rotary_speed'],
+                accel_steps=config['rotary_accel_steps'],
+                decel_steps=config['rotary_decel_steps']
+            )
+            if not move_success:
+                app_state["system_message"] = "ERROR: Motor stalled during movement! Pausing motor and stopping cycle."
+                hw.enable_rotary_motor(False)
+                break
+            
+            app_state["current_angle"] = target_angle
+            
+            # Move slider from MAX to MIN and back to MAX (continuous search pattern)
+            app_state["system_message"] = f"Searching pattern: Moving slider MIN→MAX at position {current_position}..."
+            
+            # Move to MIN
+            ultra_fast = config['slider_in_speed'] > 75
+            in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+            
+            if not in_ok:
+                app_state["system_message"] = "ERROR: Slider failed to reach MIN during search pattern."
+                break
+            
+            # Move back to MAX
+            ultra_fast = config['slider_out_speed'] > 75
+            out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+            
+            if not out_ok:
+                app_state["system_message"] = "ERROR: Slider failed to reach MAX during search pattern."
+                break
+            
+            app_state["system_message"] = f"Search pattern complete at position {current_position}. Holding at MAX until next cycle."
 
     if app_state["is_running"]:
-        app_state["system_message"] = f"Cycle complete. Processed {total_cycles} positions. Ready."
+        app_state["system_message"] = f"Cycle complete. Processed {keys_processed} keys out of {total_cycles} positions. Ready."
         
     app_state["is_running"] = False
     app_state["current_cycle"] = 0
@@ -325,11 +364,19 @@ def api_rotary_move():
 def api_rotary_set_zero():
     if app_state["is_running"]:
         return jsonify({"success": False, "message": "Busy"}), 400
-    # Trust the operator: set current as absolute zero
+    
+    # Calculate the offset from hall sensor position to current position
+    # This represents the fine adjustment needed from the hall sensor
+    app_state["home_offset"] = app_state["current_angle"]
     app_state["current_angle"] = 0
     app_state["is_homed"] = True
-    app_state["system_message"] = "Current position set as 0°."
-    return jsonify({"success": True, "message": app_state["system_message"], "current_angle": app_state["current_angle"]})
+    
+    if app_state["home_offset"] == 0.0:
+        app_state["system_message"] = "Current position set as 0° (no offset from hall sensor)."
+    else:
+        app_state["system_message"] = f"Current position set as 0°. Home offset: {app_state['home_offset']:.1f}° from hall sensor."
+    
+    return jsonify({"success": True, "message": app_state["system_message"], "current_angle": app_state["current_angle"], "home_offset": app_state["home_offset"]})
 
 # --- ADDED: Slider test cycle ---
 @app.route('/api/slider/test_cycle', methods=['POST'])

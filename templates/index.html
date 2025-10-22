@@ -14,7 +14,7 @@
         <div class="header">
             <h1>Serial Key Control</h1>
             <div class="nav-inline">
-                <a href="/">← Back to Control</a>
+                <a href="/config">← Open Configuration</a>
             </div>
         </div>
         <div class="card">
@@ -22,7 +22,7 @@
             
             <div class="button-group">
                 <button id="home-button">Home Machine</button>
-                <p>Num of Keys</p>
+                <p>Total Cycles (Keys to Process)</p>
                 <input id="cycles" type="number" min="1" value="10"
                     style="flex:0 0 100px; padding: 12px; border-radius: 5px; border: 1px solid #ccc;"
                     placeholder="Cycles">
@@ -30,18 +30,10 @@
             </div>
         </div>
         <div class="card">
-            <h2>Process Status</h2>
+            <h2>Process Status & Info</h2>
             <div class="row">
                 <div class="flex-container">
                     <div class="flex-item">Cycles Progress<span id="cycles-progress" class="status-value">0 of 0</span></div>
-                    <div class="flex-item"><span class="divider"></span></div>
-                    <div class="flex-item">Current Position<span id="current-position" class="status-value">Position 0</span></div>
-                </div>
-            </div>
-            <h2>Info & Status</h2>
-            <div class="row">
-                <div class="flex-container">
-                    <div class="flex-item">Status<span id="homed-status" class="status-value homed-no">Not Homed</span></div>
                     <div class="flex-item"><span class="divider"></span></div>
                     <div class="flex-item">Home<span id="hall" class="indicator_config"></span></div>
                     <div class="flex-item"><span class="divider"></span></div>
@@ -54,7 +46,6 @@
                     <div class="flex-item">Slider Status <span id="slider-status" class="status-text">Ready</span></div>
                     <div class="flex-item"><span class="divider"></span></div>
                     <div class="flex-item">Pico Status <span id="pico-status" class="status-text">Ready</span></div>
-
                 </div>
             </div>
         </div>

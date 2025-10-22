@@ -1,10 +1,12 @@
 {
     "step_degrees": 36.0,
     "pause_seconds": 1.0,
-    "slider_in_speed": 100,     
-    "slider_out_speed": 100,
+    "slider_in_speed": 90,
+    "slider_out_speed": 90,
+    "slider_accel_steps": 20,
+    "slider_decel_steps": 20,
     "rotary_speed": 100,
-    "rotary_accel_steps": 200,
-    "rotary_decel_steps": 100,
+    "rotary_accel_steps": 50,
+    "rotary_decel_steps": 50,
     "cycles": 10
 }

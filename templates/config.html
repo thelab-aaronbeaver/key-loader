@@ -40,7 +40,7 @@
                     <h2>Rotary Motor</h2>
                     <div class="row">
                         <button id="btn-home" class="btn-home">Move Home</button>
-                        <button id="btn-set-zero" class="btn-back">Set Zero</button>
+                        <button id="btn-set-zero" class="btn-back">Set Home</button>
                     </div>
                     <div class="row">
                         <label for="degrees">Move Degrees</label>
@@ -49,6 +49,9 @@
                     <div class="row">
                         <button id="btn-move-fwd" class="btn-move">Move +</button>
                         <button id="btn-move-bwd" class="btn-back">Move -</button>
+                    </div>
+                    <div class="row">
+                        <div class="info-text">Use Move +/- to fine-tune position, then Set Zero to update home position</div>
                     </div>
                 </div>
                 <div class="flex-item"><span class="divider"></span></div>
@@ -90,7 +93,7 @@
             <div class="row">
                 <label for="step_degrees">Step Degrees</label>
                 <input id="step_degrees" type="number" step="1" value="36">
-                <label for="cycles">Total Cycles</label>
+                <label for="cycles">Total Cycles (Keys to Process)</label>
                 <input id="cycles" type="number" min="1" step="1" value="10">
             </div>
             <div class="row">

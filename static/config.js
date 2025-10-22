@@ -88,11 +88,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     btnSetZero.addEventListener('click', async () => {
-        msg.textContent = 'Setting current position as zero...';
+        msg.textContent = 'Setting current position as zero and updating home position...';
         setBusy(true);
         try {
             const data = await postJSON('/api/rotary/set_zero');
-            msg.textContent = data.message || 'Zero set';
+            msg.textContent = data.message || 'Home position updated';
         } catch (e) {
             msg.textContent = 'Error: ' + e.message;
         } finally {
@@ -153,13 +153,40 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/status');
             const data = await res.json();
-            hall.classList.toggle('active', !!data.hall_status);
-            inductive.classList.toggle('active', !!data.inductive_status);
-            smin.classList.toggle('active', !!data.slider_min);
-            smax.classList.toggle('active', !!data.slider_max);
+            
+            // Update sensor indicators
+            if (hall) {
+                hall.classList.toggle('active', !!data.hall_status);
+            }
+            if (inductive) {
+                inductive.classList.toggle('active', !!data.inductive_status);
+            }
+            if (smin) {
+                smin.classList.toggle('active', !!data.slider_min);
+            }
+            if (smax) {
+                smax.classList.toggle('active', !!data.slider_max);
+            }
+            
+            // Update status displays
+            if (sliderStatus) {
+                if (data.is_running) {
+                    sliderStatus.textContent = 'Running';
+                    sliderStatus.className = 'status-text testing';
+                } else {
+                    sliderStatus.textContent = 'Ready';
+                    sliderStatus.className = 'status-text';
+                }
+            }
+            
+            if (picoStatus) {
+                picoStatus.textContent = 'Ready';
+                picoStatus.className = 'status-text';
+            }
+            
             setBusy(!!data.is_running);
         } catch (e) {
-            msg.textContent = 'Status error: ' + e.message;
+            if (msg) msg.textContent = 'Status error: ' + e.message;
         }
     }
 

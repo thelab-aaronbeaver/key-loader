@@ -3,9 +3,8 @@
 document.addEventListener('DOMContentLoaded', function () {
     const startButton = document.getElementById('start-button');
     const homeButton = document.getElementById('home-button'); // Added
-    const angleDisplay = document.getElementById('current-angle');
     const messageDisplay = document.getElementById('system-message');
-    const homedDisplay = document.getElementById('homed-status'); // Added
+    const homedDisplay = document.getElementById('homed-status');
     const hallIndicator = document.getElementById('hall');
     const inductiveIndicator = document.getElementById('inductive');
     const sliderMinIndicator = document.getElementById('smin');
@@ -23,6 +22,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     startButton.addEventListener('click', async () => {
         messageDisplay.textContent = 'Starting cycle...';
+        // Reset cycles progress display
+        cyclesProgressDisplay.textContent = '0 of 0';
+        currentPositionDisplay.textContent = 'Position 0';
+        
         const cyclesInput = document.getElementById('cycles');
         const cycles = cyclesInput ? parseInt(cyclesInput.value, 10) || 1 : 1;
         try {
@@ -36,7 +39,6 @@ document.addEventListener('DOMContentLoaded', function () {
         fetch('/api/status')
             .then(response => response.json())
             .then(data => {
-                angleDisplay.textContent = data.current_angle + '°';
                 messageDisplay.textContent = data.system_message;
 
                 // --- MODIFIED: Update homing status display ---
@@ -48,10 +50,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     homedDisplay.className = 'status-value homed-no';
                 }
 
-                hallIndicator.classList.toggle('active', data.hall_status);
-                inductiveIndicator.classList.toggle('active', data.inductive_status);
-                sliderMinIndicator.classList.toggle('active', data.slider_min);
-                sliderMaxIndicator.classList.toggle('active', data.slider_max);
+                // Update sensor indicators
+                if (hallIndicator) {
+                    hallIndicator.classList.toggle('active', data.hall_status);
+                }
+                if (inductiveIndicator) {
+                    inductiveIndicator.classList.toggle('active', data.inductive_status);
+                }
+                if (sliderMinIndicator) {
+                    sliderMinIndicator.classList.toggle('active', data.slider_min);
+                }
+                if (sliderMaxIndicator) {
+                    sliderMaxIndicator.classList.toggle('active', data.slider_max);
+                }
 
                 // --- ADDED: Update cycle progress display ---
                 if (data.total_cycles > 0) {

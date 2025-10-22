@@ -64,35 +64,42 @@ This system automates the process of detecting keys on a rotating table and trig
 - Set current position as 0° reference
 - Mark system as "homed" and ready for operation
 
-### 3. Cycle Operation
-The main processing cycle follows this sequence:
+### 3. Key-Driven Cycle Operation
+The system operates as a continuous key detection and processing machine:
 
 ```
 Start State:
 0. Check hall sensor at 0° position
 1. Position slider to OUT (MAX) limit switch
 
-For each cycle step:
-1. Move rotary motor by configured step degrees
-2. Verify position with hall sensor
-3. Check inductive sensor for key presence
-4. If key detected:
-   a. Send trigger command to Raspberry Pico (emulate keyboard Enter)
-   b. Simultaneously: Wait for configured pause time AND move slider to IN (MIN) limit switch
-   c. Move slider to OUT (MAX) limit switch
-   d. Continue to next position
-5. If no key: Continue to next position
-6. Repeat for configured number of cycles
+Key-Driven Cycle Loop:
+For each position until target keys are processed:
+1. Check inductive sensor for key presence
+2. If KEY DETECTED:
+   a. Trigger Pico (emulate keyboard Enter)
+   b. Move slider MAX → MIN → MAX
+   c. Wait for pause timer
+   d. Count as processed key
+3. If NO KEY DETECTED:
+   a. Move rotary motor by step degrees
+   b. Move slider MAX → MIN → MAX (search pattern)
+   c. Hold at MAX until next cycle
+4. Continue until target number of keys processed
 ```
 
-### 4. Key Detection Process
+### 4. Key Processing Sequence
 When a key is detected:
 1. **Trigger Pico**: Send GPIO pulse to emulate keyboard Enter press
-2. **Simultaneous Operations**: 
-   - **Pause**: Wait for processing timer (configurable duration)
-   - **Slider IN**: Move slider to inward limit switch (MIN position)
-3. **Slider OUT**: Move slider to outward limit switch (MAX position)
-4. **Continue**: Proceed to next rotary position
+2. **Slider Processing**: Move slider from MAX → MIN → MAX
+3. **Pause Timer**: Wait for configured processing time
+4. **Progress Update**: Count as processed key and continue search
+
+### 5. Continuous Search Pattern
+When no key is detected:
+1. **Rotary Movement**: Move to next position by step degrees
+2. **Search Pattern**: Move slider MAX → MIN → MAX
+3. **Hold Position**: Stay at MAX limit switch until next cycle
+4. **Repeat**: Continue searching until key is found
 
 ## Configuration
 
