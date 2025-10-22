@@ -30,7 +30,7 @@ class HardwareController:
         # SERVO42C with 12V supply - balanced performance
         # Recommended: 4x microstepping (800 pulses/rev) for 12V operation
         self.SLIDER_PULSES_PER_REV = 800  # 4x microstepping (optimized for 12V)
-        self.SLIDER_MAX_PULSE_RATE = 25000  # SERVO42C with 12V can handle 25kHz+
+        self.SLIDER_MAX_PULSE_RATE = 2500  # SERVO42C with 12V can handle 25kHz+
         
         # --- ADDED: Slider motor limit switches ---
         # NOTE: Adjust these BCM pins to match wiring for the slider rail.
@@ -442,4 +442,5 @@ class HardwareController:
         self.enable_rotary_motor(False)
         self.enable_slider_motor(False)
         GPIO.cleanup()
+
         print("GPIO cleanup complete.")
