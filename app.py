@@ -13,6 +13,9 @@ app.config['SECRET_KEY'] = 'key_loader_secret_key_2024'
 socketio = SocketIO(app, cors_allowed_origins="*")
 hw = HardwareController()
 
+# --- ADDED: Thread Safety Lock ---
+app_state_lock = threading.Lock()
+
 # --- MODIFIED: Application State ---
 app_state = {
     "current_angle": 0,
@@ -69,21 +72,40 @@ def load_config():
     save_config(default_config)
     return default_config
 
+def safe_get_app_state():
+    """Thread-safe getter for app_state."""
+    with app_state_lock:
+        return app_state.copy()  # Return a copy to avoid external modifications
+
+def safe_set_app_state(key, value):
+    """Thread-safe setter for app_state."""
+    with app_state_lock:
+        app_state[key] = value
+
+def safe_update_app_state(updates):
+    """Thread-safe bulk updater for app_state."""
+    with app_state_lock:
+        app_state.update(updates)
+
 def emit_status_update():
     """Emit current status to all connected WebSocket clients."""
     try:
         # Update sensor readings
-        app_state["hall_status"] = hw.read_hall_sensor()
-        app_state["inductive_status"] = hw.read_inductive_sensor()
-        try:
-            app_state["slider_min"] = hw.read_slider_min()
-            app_state["slider_max"] = hw.read_slider_max()
-        except AttributeError:
-            app_state["slider_min"] = False
-            app_state["slider_max"] = False
+        with app_state_lock:
+            app_state["hall_status"] = hw.read_hall_sensor()
+            app_state["inductive_status"] = hw.read_inductive_sensor()
+            try:
+                app_state["slider_min"] = hw.read_slider_min()
+                app_state["slider_max"] = hw.read_slider_max()
+            except AttributeError:
+                app_state["slider_min"] = False
+                app_state["slider_max"] = False
+            
+            # Create a copy for emission
+            state_copy = app_state.copy()
         
         # Emit to all connected clients
-        socketio.emit('status_update', app_state)
+        socketio.emit('status_update', state_copy)
     except Exception as e:
         print(f"Error emitting status update: {e}")
 
@@ -175,57 +197,64 @@ def run_cycle_background(total_cycles):
     """Run the main cycle loop in a background thread."""
     try:
         # --- UPDATED: Start State - Check hall sensor and position slider OUT ---
-        app_state["system_message"] = "Starting key-driven cycle - checking initial position..."
+        safe_set_app_state("system_message", "Starting key-driven cycle - checking initial position...")
         emit_status_update()
         
         # Check hall sensor at start position
         is_hall_active = hw.read_hall_sensor()
         if not is_hall_active:
-            app_state["system_message"] = "ERROR: Hall sensor not active at start position (0°)!"
-            app_state["is_running"] = False
+            safe_update_app_state({
+                "system_message": "ERROR: Hall sensor not active at start position (0°)!",
+                "is_running": False
+            })
             return
         
         # Position slider to OUT (MAX) limit switch at start
-        app_state["system_message"] = "Positioning slider to OUT (MAX) position..."
+        safe_set_app_state("system_message", "Positioning slider to OUT (MAX) position...")
         accel_steps = config.get('slider_accel_steps', 15)
         decel_steps = config.get('slider_decel_steps', 15)
         ultra_fast = config['slider_out_speed'] > 75
         out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
         
         if not out_ok:
-            app_state["system_message"] = "ERROR: Slider failed to reach OUT limit switch at start."
-            app_state["is_running"] = False
+            safe_update_app_state({
+                "system_message": "ERROR: Slider failed to reach OUT limit switch at start.",
+                "is_running": False
+            }).
             return
         
-        app_state["system_message"] = "Start state complete. Beginning key detection cycle..."
+        safe_set_app_state("system_message", "Start state complete. Beginning key detection cycle...")
 
         # --- UPDATED: Key-driven cycle loop ---
         keys_processed = 0
         current_position = 0
         
-        while keys_processed < total_cycles and app_state["is_running"] and not app_state["stop_requested"] and not app_state["emergency_stop"]:
+        # Get initial state safely
+        current_state = safe_get_app_state()
+        while keys_processed < total_cycles and current_state["is_running"] and not current_state["stop_requested"] and not current_state["emergency_stop"]:
             current_position += 1
-            app_state["current_cycle"] = current_position
+            safe_set_app_state("current_cycle", current_position)
             target_angle = (current_position * config['step_degrees']) % 360
             
             # Check for emergency stop first
-            if app_state["emergency_stop"]:
-                app_state["system_message"] = "🚨 EMERGENCY STOP ACTIVATED! Cycle terminated immediately."
+            current_state = safe_get_app_state()
+            if current_state["emergency_stop"]:
+                safe_set_app_state("system_message", "🚨 EMERGENCY STOP ACTIVATED! Cycle terminated immediately.")
                 break
             
             # Check for stop request
-            if app_state["stop_requested"]:
-                app_state["system_message"] = "Cycle stopped by user request."
+            if current_state["stop_requested"]:
+                safe_set_app_state("system_message", "Cycle stopped by user request.")
                 break
             
             # Step 1: Key Detection with Proximity Switch
-            app_state["system_message"] = f"Searching for key at position {current_position} of {total_cycles} ({target_angle}°)..."
+            safe_set_app_state("system_message", f"Searching for key at position {current_position} of {total_cycles} ({target_angle}°)...")
             emit_status_update()
             
             if hw.read_inductive_sensor():
                 # Key detected - process it
                 keys_processed += 1
-                app_state["system_message"] = f"✅ Key detected at position {current_position} of {total_cycles} ({target_angle}°). Processing key {keys_processed} of {total_cycles}..."
+                safe_set_app_state("system_message", f"✅ Key detected at position {current_position} of {total_cycles} ({target_angle}°). Processing key {keys_processed} of {total_cycles}...")
                 emit_status_update()
                 
                 # Step 2: Simultaneous Operations
@@ -233,37 +262,41 @@ def run_cycle_background(total_cycles):
                 send_pico_command("keyboard_enter")
                 
                 # - Move slider from MAX to MIN
-                app_state["system_message"] = f"Processing key {keys_processed} of {total_cycles}. Moving slider to MIN position..."
+                safe_set_app_state("system_message", f"Processing key {keys_processed} of {total_cycles}. Moving slider to MIN position...")
                 ultra_fast = config['slider_in_speed'] > 75
                 in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
                 
                 if not in_ok:
-                    app_state["system_message"] = "🚨 ERROR: Slider motor stalled moving to MIN! Check for jams and clear obstruction. Motor paused for safety."
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Slider motor stalled moving to MIN! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
                     hw.enable_slider_motor(False)
-                    app_state["is_running"] = False
                     return
                 
                 # - Move slider from MIN back to MAX
-                app_state["system_message"] = f"Key {keys_processed} of {total_cycles}. Moving slider back to MAX position..."
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving slider back to MAX position...")
                 ultra_fast = config['slider_out_speed'] > 75
                 out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
                 
                 if not out_ok:
-                    app_state["system_message"] = "🚨 ERROR: Slider motor stalled moving to MAX! Check for jams and clear obstruction. Motor paused for safety."
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Slider motor stalled moving to MAX! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
                     hw.enable_slider_motor(False)
-                    app_state["is_running"] = False
                     return
                 
                 # - Start pause timer
                 pause_time = max(config['pause_seconds'], 0)
-                app_state["system_message"] = f"Key {keys_processed} of {total_cycles} processed. Waiting {pause_time:.1f}s pause timer..."
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} processed. Waiting {pause_time:.1f}s pause timer...")
                 time.sleep(pause_time)
                 
-                app_state["system_message"] = f"Key {keys_processed} of {total_cycles} complete. Ready for next position."
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} complete. Ready for next position.")
                 
             else:
                 # No key detected - move to next position
-                app_state["system_message"] = f"No key at position {current_position} of {total_cycles} ({target_angle}°). Moving to next position..."
+                safe_set_app_state("system_message", f"No key at position {current_position} of {total_cycles} ({target_angle}°). Moving to next position...")
                 
                 # Move rotary motor by step degrees
                 move_success = hw.move_degrees(
@@ -273,24 +306,28 @@ def run_cycle_background(total_cycles):
                     decel_steps=config['rotary_decel_steps']
                 )
                 if not move_success:
-                    app_state["system_message"] = "🚨 ERROR: Rotary motor stalled! Check for jams and clear obstruction. Motor paused for safety."
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Rotary motor stalled! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
                     hw.enable_rotary_motor(False)
-                    app_state["is_running"] = False
                     return
                 
-                app_state["current_angle"] = target_angle
+                safe_set_app_state("current_angle", target_angle)
                 
                 # Move slider from MAX to MIN and back to MAX (continuous search pattern)
-                app_state["system_message"] = f"Searching pattern: Moving slider MIN→MAX at position {current_position}..."
+                safe_set_app_state("system_message", f"Searching pattern: Moving slider MIN→MAX at position {current_position}...")
                 
                 # Move to MIN
                 ultra_fast = config['slider_in_speed'] > 75
                 in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
                 
                 if not in_ok:
-                    app_state["system_message"] = "🚨 ERROR: Slider motor stalled during search pattern (MIN)! Check for jams and clear obstruction. Motor paused for safety."
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Slider motor stalled during search pattern (MIN)! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
                     hw.enable_slider_motor(False)
-                    app_state["is_running"] = False
                     return
                 
                 # Move back to MAX
@@ -298,83 +335,106 @@ def run_cycle_background(total_cycles):
                 out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
                 
                 if not out_ok:
-                    app_state["system_message"] = "🚨 ERROR: Slider motor stalled during search pattern (MAX)! Check for jams and clear obstruction. Motor paused for safety."
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Slider motor stalled during search pattern (MAX)! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
                     hw.enable_slider_motor(False)
-                    app_state["is_running"] = False
                     return
                 
-                app_state["system_message"] = f"Search pattern complete at position {current_position}. Holding at MAX until next cycle."
+                safe_set_app_state("system_message", f"Search pattern complete at position {current_position}. Holding at MAX until next cycle.")
 
         # Final cleanup
-        if app_state["is_running"]:
-            if app_state["emergency_stop"]:
-                app_state["system_message"] = f"🚨 EMERGENCY STOP! Cycle terminated. Processed {keys_processed} keys out of {total_cycles} positions."
-            elif app_state["stop_requested"]:
-                app_state["system_message"] = f"Cycle stopped by user. Processed {keys_processed} keys out of {total_cycles} positions. Ready."
+        final_state = safe_get_app_state()
+        if final_state["is_running"]:
+            if final_state["emergency_stop"]:
+                safe_set_app_state("system_message", f"🚨 EMERGENCY STOP! Cycle terminated. Processed {keys_processed} keys out of {total_cycles} positions.")
+            elif final_state["stop_requested"]:
+                safe_set_app_state("system_message", f"Cycle stopped by user. Processed {keys_processed} keys out of {total_cycles} positions. Ready.")
             else:
-                app_state["system_message"] = f"Cycle complete. Processed {keys_processed} keys out of {total_cycles} positions. Ready."
+                safe_set_app_state("system_message", f"Cycle complete. Processed {keys_processed} keys out of {total_cycles} positions. Ready.")
             
-        app_state["is_running"] = False
-        app_state["current_cycle"] = 0
-        app_state["total_cycles"] = 0
-        if not app_state["emergency_stop"]:  # Don't reset stop flag if emergency stop is active
-            app_state["stop_requested"] = False
-        app_state["cycle_thread"] = None  # Clear thread reference
+        safe_update_app_state({
+            "is_running": False,
+            "current_cycle": 0,
+            "total_cycles": 0,
+            "cycle_thread": None
+        })
+        
+        # Don't reset stop flag if emergency stop is active
+        if not final_state["emergency_stop"]:
+            safe_set_app_state("stop_requested", False)
+            
         emit_status_update()  # Final status update
         
     except Exception as e:
-        app_state["system_message"] = f"🚨 ERROR: Cycle failed with exception: {str(e)}"
-        app_state["is_running"] = False
-        app_state["current_cycle"] = 0
-        app_state["total_cycles"] = 0
-        app_state["stop_requested"] = False
-        app_state["cycle_thread"] = None
+        safe_update_app_state({
+            "system_message": f"🚨 ERROR: Cycle failed with exception: {str(e)}",
+            "is_running": False,
+            "current_cycle": 0,
+            "total_cycles": 0,
+            "stop_requested": False,
+            "cycle_thread": None
+        })
 
 # --- ADDED: Homing Route ---
 @app.route('/api/home', methods=['POST'])
 def home_machine():
-    if app_state["is_running"]:
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
         return jsonify({"error": "Cannot home while cycle is running."}), 400
 
-    app_state["is_running"] = True
-    app_state["system_message"] = "Homing in progress..."
+    safe_update_app_state({
+        "is_running": True,
+        "system_message": "Homing in progress..."
+    })
     
     # First, home to hall sensor position
     success = hw.home_table()
     
     if success:
         # Apply fine-tuned home offset if it exists
-        if app_state["home_offset"] != 0.0:
-            app_state["system_message"] = f"Applying fine adjustment of {app_state['home_offset']:.1f}°..."
+        current_state = safe_get_app_state()
+        if current_state["home_offset"] != 0.0:
+            safe_set_app_state("system_message", f"Applying fine adjustment of {current_state['home_offset']:.1f}°...")
             move_success = hw.move_degrees(
-                app_state["home_offset"], 
+                current_state["home_offset"], 
                 speed=config['rotary_speed'],
                 accel_steps=config['rotary_accel_steps'],
                 decel_steps=config['rotary_decel_steps']
             )
             if not move_success:
-                app_state["system_message"] = "ERROR: Fine adjustment failed. Motor stalled."
-                app_state["is_running"] = False
+                safe_update_app_state({
+                    "system_message": "ERROR: Fine adjustment failed. Motor stalled.",
+                    "is_running": False
+                })
                 return jsonify({"success": False})
         
-        app_state["is_homed"] = True
-        app_state["current_angle"] = 0
-        app_state["system_message"] = "Homing successful. Ready to start cycle."
+        safe_update_app_state({
+            "is_homed": True,
+            "current_angle": 0,
+            "system_message": "Homing successful. Ready to start cycle."
+        })
     else:
-        app_state["is_homed"] = False
-        app_state["system_message"] = "ERROR: Homing failed. Check switch and wiring."
+        safe_update_app_state({
+            "is_homed": False,
+            "system_message": "ERROR: Homing failed. Check switch and wiring."
+        })
 
-    app_state["is_running"] = False
+    safe_set_app_state("is_running", False)
     return jsonify({"success": success})
 
 # --- ADDED: Stop Cycle Route ---
 @app.route('/api/stop', methods=['POST'])
 def stop_cycle():
-    if not app_state["is_running"]:
+    current_state = safe_get_app_state()
+    if not current_state["is_running"]:
         return jsonify({"error": "No cycle is currently running."}), 400
     
-    app_state["stop_requested"] = True
-    app_state["system_message"] = "Stop requested. Cycle will stop at next safe point..."
+    safe_update_app_state({
+        "stop_requested": True,
+        "system_message": "Stop requested. Cycle will stop at next safe point..."
+    })
     emit_status_update()
     return jsonify({"message": "Stop requested"})
 
@@ -382,9 +442,15 @@ def stop_cycle():
 @app.route('/api/emergency_stop', methods=['POST'])
 def emergency_stop():
     """Immediately halt all motion - true emergency stop."""
-    app_state["emergency_stop"] = True
-    app_state["stop_requested"] = True
-    app_state["is_running"] = False
+    safe_update_app_state({
+        "emergency_stop": True,
+        "stop_requested": True,
+        "is_running": False,
+        "system_message": "🚨 EMERGENCY STOP ACTIVATED! All motion halted immediately. Check system before restarting.",
+        "current_cycle": 0,
+        "total_cycles": 0,
+        "cycle_thread": None
+    })
     
     # Immediately disable all motors
     try:
@@ -392,13 +458,6 @@ def emergency_stop():
         hw.enable_slider_motor(False)
     except Exception as e:
         print(f"Error disabling motors during E-Stop: {e}")
-    
-    app_state["system_message"] = "🚨 EMERGENCY STOP ACTIVATED! All motion halted immediately. Check system before restarting."
-    
-    # Reset cycle state
-    app_state["current_cycle"] = 0
-    app_state["total_cycles"] = 0
-    app_state["cycle_thread"] = None
     
     # Emit immediate status update
     emit_status_update()
@@ -409,23 +468,26 @@ def emergency_stop():
 @app.route('/api/emergency_stop_reset', methods=['POST'])
 def emergency_stop_reset():
     """Reset emergency stop state to allow normal operation."""
-    app_state["emergency_stop"] = False
-    app_state["stop_requested"] = False
-    app_state["system_message"] = "Emergency stop reset. System ready for normal operation."
+    safe_update_app_state({
+        "emergency_stop": False,
+        "stop_requested": False,
+        "system_message": "Emergency stop reset. System ready for normal operation."
+    })
     emit_status_update()
     return jsonify({"message": "Emergency stop reset"})
 
 @app.route('/api/start', methods=['POST'])
 def start_cycle():
     # --- MODIFIED: Check for emergency stop state ---
-    if app_state["emergency_stop"]:
+    current_state = safe_get_app_state()
+    if current_state["emergency_stop"]:
         return jsonify({"error": "Emergency stop is active. Reset emergency stop before starting cycle."}), 400
     
     # --- MODIFIED: Check for homing status before starting ---
-    if not app_state["is_homed"]:
+    if not current_state["is_homed"]:
         return jsonify({"error": "Machine must be homed before starting a cycle."}), 400
     
-    if app_state["is_running"]:
+    if current_state["is_running"]:
         return jsonify({"error": "Cycle is already running."}), 400
     
     # Allow overriding cycles in request
@@ -433,16 +495,19 @@ def start_cycle():
     total_cycles = int(data.get('cycles', config.get('cycles', 10)))
 
     # Set up cycle state
-    app_state["is_running"] = True
-    app_state["current_angle"] = 0
-    app_state["current_cycle"] = 0
-    app_state["total_cycles"] = total_cycles
-    app_state["stop_requested"] = False  # Reset stop flag
+    safe_update_app_state({
+        "is_running": True,
+        "current_angle": 0,
+        "current_cycle": 0,
+        "total_cycles": total_cycles,
+        "stop_requested": False  # Reset stop flag
+    })
 
     # Start the cycle in a background thread
-    app_state["cycle_thread"] = threading.Thread(target=run_cycle_background, args=(total_cycles,))
-    app_state["cycle_thread"].daemon = True  # Thread will die when main process dies
-    app_state["cycle_thread"].start()
+    safe_set_app_state("cycle_thread", threading.Thread(target=run_cycle_background, args=(total_cycles,)))
+    current_state = safe_get_app_state()
+    current_state["cycle_thread"].daemon = True  # Thread will die when main process dies
+    current_state["cycle_thread"].start()
     
     # Emit initial status update
     emit_status_update()
@@ -451,93 +516,126 @@ def start_cycle():
 
 @app.route('/api/status')
 def get_status():
-    app_state["hall_status"] = hw.read_hall_sensor()
-    app_state["inductive_status"] = hw.read_inductive_sensor()
-    # --- ADDED: slider switches ---
-    try:
-        app_state["slider_min"] = hw.read_slider_min()
-        app_state["slider_max"] = hw.read_slider_max()
-    except AttributeError:
-        # Backward compatibility if methods not present
-        app_state["slider_min"] = False
-        app_state["slider_max"] = False
-    return jsonify(app_state)
+    # Update sensor readings and return current state
+    with app_state_lock:
+        app_state["hall_status"] = hw.read_hall_sensor()
+        app_state["inductive_status"] = hw.read_inductive_sensor()
+        # --- ADDED: slider switches ---
+        try:
+            app_state["slider_min"] = hw.read_slider_min()
+            app_state["slider_max"] = hw.read_slider_max()
+        except AttributeError:
+            # Backward compatibility if methods not present
+            app_state["slider_min"] = False
+            app_state["slider_max"] = False
+        return jsonify(app_state.copy())
 
 # --- ADDED: Rotary controls for config page ---
 @app.route('/api/rotary/home', methods=['POST'])
 def api_rotary_home():
-    if app_state["is_running"]:
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
         return jsonify({"success": False, "message": "Busy"}), 400
-    app_state["is_running"] = True
-    app_state["system_message"] = "Rotary homing..."
+    
+    safe_update_app_state({
+        "is_running": True,
+        "system_message": "Rotary homing..."
+    })
+    
     ok = hw.home_table()
-    app_state["is_homed"] = bool(ok)
-    app_state["current_angle"] = 0 if ok else app_state["current_angle"]
-    app_state["system_message"] = "Rotary homed" if ok else "Rotary homing failed"
-    app_state["is_running"] = False
-    return jsonify({"success": ok, "message": app_state["system_message"]})
+    
+    safe_update_app_state({
+        "is_homed": bool(ok),
+        "current_angle": 0 if ok else current_state["current_angle"],
+        "system_message": "Rotary homed" if ok else "Rotary homing failed",
+        "is_running": False
+    })
+    
+    final_state = safe_get_app_state()
+    return jsonify({"success": ok, "message": final_state["system_message"]})
 
 @app.route('/api/rotary/move', methods=['POST'])
 def api_rotary_move():
-    if app_state["is_running"]:
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
         return jsonify({"success": False, "message": "Busy"}), 400
+    
     data = request.get_json(silent=True) or {}
     try:
         degrees = float(data.get("degrees", 0))
     except (TypeError, ValueError):
         return jsonify({"success": False, "message": "Invalid degrees"}), 400
-    app_state["is_running"] = True
-    app_state["system_message"] = f"Moving {degrees}°..."
+    
+    safe_update_app_state({
+        "is_running": True,
+        "system_message": f"Moving {degrees}°..."
+    })
+    
     ok = hw.move_degrees(
         degrees,
         speed=config['rotary_speed'],
         accel_steps=config['rotary_accel_steps'],
         decel_steps=config['rotary_decel_steps']
     )
+    
     if ok:
-        app_state["current_angle"] = (app_state["current_angle"] + degrees) % 360
+        new_angle = (current_state["current_angle"] + degrees) % 360
+        safe_set_app_state("current_angle", new_angle)
+        
         # Verification: if we expect to be at 0° (within numeric wrap), hall should be active
-        at_zero = abs(app_state["current_angle"]) < 1e-6 or abs(app_state["current_angle"] - 360) < 1e-6
+        at_zero = abs(new_angle) < 1e-6 or abs(new_angle - 360) < 1e-6
         if at_zero:
             if not hw.read_hall_sensor():
                 ok = False
-                app_state["system_message"] = "ERROR: Expected hall at 0°, but not detected."
+                safe_set_app_state("system_message", "ERROR: Expected hall at 0°, but not detected.")
             else:
-                app_state["system_message"] = f"Moved {degrees}° (hall verified)"
+                safe_set_app_state("system_message", f"Moved {degrees}° (hall verified)")
         else:
-            app_state["system_message"] = f"Moved {degrees}°"
+            safe_set_app_state("system_message", f"Moved {degrees}°")
     else:
-        app_state["system_message"] = "Move failed"
-    app_state["is_running"] = False
-    return jsonify({"success": ok, "message": app_state["system_message"], "current_angle": app_state["current_angle"]})
+        safe_set_app_state("system_message", "Move failed")
+    
+    safe_set_app_state("is_running", False)
+    final_state = safe_get_app_state()
+    return jsonify({"success": ok, "message": final_state["system_message"], "current_angle": final_state["current_angle"]})
 
 # --- ADDED: Set current position as zero ---
 @app.route('/api/rotary/set_zero', methods=['POST'])
 def api_rotary_set_zero():
-    if app_state["is_running"]:
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
         return jsonify({"success": False, "message": "Busy"}), 400
     
     # Calculate the offset from hall sensor position to current position
     # This represents the fine adjustment needed from the hall sensor
-    app_state["home_offset"] = app_state["current_angle"]
-    app_state["current_angle"] = 0
-    app_state["is_homed"] = True
+    home_offset = current_state["current_angle"]
     
-    if app_state["home_offset"] == 0.0:
-        app_state["system_message"] = "Current position set as 0° (no offset from hall sensor)."
+    if home_offset == 0.0:
+        system_message = "Current position set as 0° (no offset from hall sensor)."
     else:
-        app_state["system_message"] = f"Current position set as 0°. Home offset: {app_state['home_offset']:.1f}° from hall sensor."
+        system_message = f"Current position set as 0°. Home offset: {home_offset:.1f}° from hall sensor."
     
-    return jsonify({"success": True, "message": app_state["system_message"], "current_angle": app_state["current_angle"], "home_offset": app_state["home_offset"]})
+    safe_update_app_state({
+        "home_offset": home_offset,
+        "current_angle": 0,
+        "is_homed": True,
+        "system_message": system_message
+    })
+    
+    final_state = safe_get_app_state()
+    return jsonify({"success": True, "message": final_state["system_message"], "current_angle": final_state["current_angle"], "home_offset": final_state["home_offset"]})
 
 # --- ADDED: Slider test cycle ---
 @app.route('/api/slider/test_cycle', methods=['POST'])
 def api_slider_test_cycle():
-    if app_state["is_running"]:
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
         return jsonify({"success": False, "message": "Busy"}), 400
     
-    app_state["is_running"] = True
-    app_state["system_message"] = "Starting slider test cycle..."
+    safe_update_app_state({
+        "is_running": True,
+        "system_message": "Starting slider test cycle..."
+    })
     
     try:
         # Get current slider speeds and acceleration from config
@@ -545,63 +643,72 @@ def api_slider_test_cycle():
         decel_steps = config.get('slider_decel_steps', 15)
         
         # Step 1: Move to MIN limit switch
-        app_state["system_message"] = "Moving slider to MIN position..."
+        safe_set_app_state("system_message", "Moving slider to MIN position...")
         ultra_fast = config['slider_in_speed'] > 75
         min_success = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
         
         if not min_success:
-            app_state["system_message"] = "ERROR: Failed to reach MIN limit switch"
-            return jsonify({"success": False, "message": app_state["system_message"]})
+            safe_set_app_state("system_message", "ERROR: Failed to reach MIN limit switch")
+            final_state = safe_get_app_state()
+            return jsonify({"success": False, "message": final_state["system_message"]})
         
         # Step 2: Move to MAX limit switch
-        app_state["system_message"] = "Moving slider to MAX position..."
+        safe_set_app_state("system_message", "Moving slider to MAX position...")
         ultra_fast = config['slider_out_speed'] > 75
         max_success = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
         
         if not max_success:
-            app_state["system_message"] = "ERROR: Failed to reach MAX limit switch"
-            return jsonify({"success": False, "message": app_state["system_message"]})
+            safe_set_app_state("system_message", "ERROR: Failed to reach MAX limit switch")
+            final_state = safe_get_app_state()
+            return jsonify({"success": False, "message": final_state["system_message"]})
         
         # Step 3: Return to MIN limit switch
-        app_state["system_message"] = "Returning slider to MIN position..."
+        safe_set_app_state("system_message", "Returning slider to MIN position...")
         ultra_fast = config['slider_in_speed'] > 75
         return_success = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
         
         if not return_success:
-            app_state["system_message"] = "ERROR: Failed to return to MIN limit switch"
-            return jsonify({"success": False, "message": app_state["system_message"]})
+            safe_set_app_state("system_message", "ERROR: Failed to return to MIN limit switch")
+            final_state = safe_get_app_state()
+            return jsonify({"success": False, "message": final_state["system_message"]})
         
-        app_state["system_message"] = "Slider test cycle completed successfully"
-        return jsonify({"success": True, "message": app_state["system_message"]})
+        safe_set_app_state("system_message", "Slider test cycle completed successfully")
+        final_state = safe_get_app_state()
+        return jsonify({"success": True, "message": final_state["system_message"]})
         
     except Exception as e:
-        app_state["system_message"] = f"Slider test error: {str(e)}"
-        return jsonify({"success": False, "message": app_state["system_message"]})
+        safe_set_app_state("system_message", f"Slider test error: {str(e)}")
+        final_state = safe_get_app_state()
+        return jsonify({"success": False, "message": final_state["system_message"]})
     finally:
-        app_state["is_running"] = False
+        safe_set_app_state("is_running", False)
 
 # --- ADDED: Pico test endpoint ---
 @app.route('/api/pico/test', methods=['POST'])
 def api_pico_test():
     """Test Pico trigger functionality"""
-    if app_state["is_running"]:
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
         return jsonify({"success": False, "message": "Busy"}), 400
     
     try:
-        app_state["is_running"] = True
-        app_state["system_message"] = "Testing Pico trigger..."
+        safe_update_app_state({
+            "is_running": True,
+            "system_message": "Testing Pico trigger..."
+        })
         
         # Send trigger pulse to Pico
         hw.trigger_pico(duration_ms=100)
         
-        app_state["system_message"] = "Pico trigger sent successfully"
+        safe_set_app_state("system_message", "Pico trigger sent successfully")
         return jsonify({"success": True, "message": "Pico trigger sent"})
         
     except Exception as e:
-        app_state["system_message"] = f"Pico test error: {str(e)}"
-        return jsonify({"success": False, "message": app_state["system_message"]})
+        safe_set_app_state("system_message", f"Pico test error: {str(e)}")
+        final_state = safe_get_app_state()
+        return jsonify({"success": False, "message": final_state["system_message"]})
     finally:
-        app_state["is_running"] = False
+        safe_set_app_state("is_running", False)
 
 
 if __name__ == '__main__':
