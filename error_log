@@ -10,3 +10,4 @@ startButton.addEventListener('click', async () => {
             // Reset cycles progress display
             cyclesProgressDisplay.textContent = '0 of 0';
             currentPositionDisplay.textContent = 'Position 0';
+ 
