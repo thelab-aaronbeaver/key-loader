@@ -265,43 +265,18 @@ def run_cycle_background(total_cycles):
                 safe_set_app_state("system_message", f"✅ Key detected at position {current_position} ({target_angle}°). Processing key {keys_processed} of {total_cycles}...")
                 emit_status_update()
                 
-                # Step 2: Simultaneous Operations
-                # - Trigger Pico
+                # Step 2: Key Processing Sequence (Reordered)
+                # 1. Trigger Pico
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Triggering Pico keyboard emulator...")
                 send_pico_command("keyboard_enter")
                 
-                # - Move slider from MAX to MIN
-                safe_set_app_state("system_message", f"Processing key {keys_processed} of {total_cycles}. Moving slider to MIN position...")
-                ultra_fast = config['slider_in_speed'] > 75
-                in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-                
-                if not in_ok:
-                    safe_update_app_state({
-                        "system_message": "🚨 ERROR: Slider motor stalled moving to MIN! Check for jams and clear obstruction. Motor paused for safety.",
-                        "is_running": False
-                    })
-                    hw.enable_slider_motor(False)
-                    return
-                
-                # - Move slider from MIN back to MAX
-                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving slider back to MAX position...")
-                ultra_fast = config['slider_out_speed'] > 75
-                out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-                
-                if not out_ok:
-                    safe_update_app_state({
-                        "system_message": "🚨 ERROR: Slider motor stalled moving to MAX! Check for jams and clear obstruction. Motor paused for safety.",
-                        "is_running": False
-                    })
-                    hw.enable_slider_motor(False)
-                    return
-                
-                # - Start pause timer
+                # 2. Wait for pause timer
                 pause_time = max(config['pause_seconds'], 0)
-                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} processed. Waiting {pause_time:.1f}s pause timer...")
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Waiting {pause_time:.1f}s pause timer...")
                 time.sleep(pause_time)
                 
-                # - Move rotary motor to next position after key processing
-                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} complete. Moving to next position...")
+                # 3. Move rotary motor to next position
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving rotary to next position...")
                 move_success = hw.move_degrees(
                     config['step_degrees'], 
                     speed=config['rotary_speed'],
@@ -317,7 +292,35 @@ def run_cycle_background(total_cycles):
                     return
                 
                 safe_set_app_state("current_angle", target_angle)
-                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} complete. Ready for next position.")
+                
+                # 4. Move slider from MAX to MIN
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving slider to MIN position...")
+                ultra_fast = config['slider_in_speed'] > 75
+                in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                
+                if not in_ok:
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Slider motor stalled moving to MIN! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
+                    hw.enable_slider_motor(False)
+                    return
+                
+                # 5. Move slider from MIN back to MAX
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving slider back to MAX position...")
+                ultra_fast = config['slider_out_speed'] > 75
+                out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                
+                if not out_ok:
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Slider motor stalled moving to MAX! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
+                    hw.enable_slider_motor(False)
+                    return
+                
+                # 6. Key processing complete
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} complete. Ready for next search.")
                 
             else:
                 # No key detected - move to next position
