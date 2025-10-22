@@ -221,7 +221,7 @@ class HardwareController:
     def _servo42c_speed_to_delay(self, speed):
         """Convert 0-100 speed to delay for SERVO42C (750 RPM maximum)."""
         if speed <= 0:
-           # return 0.01  # Very slow if stopped
+           return 0.001  # Very slow if stopped
         # SERVO42C optimized for 750 RPM maximum
         # 100 = 0.0001s (0.1ms) = 750 RPM, 50 = 0.0002s (0.2ms) = 375 RPM
         return max(0.0001, 0.001 / (speed / 100.0))
@@ -444,6 +444,7 @@ class HardwareController:
         GPIO.cleanup()
 
         print("GPIO cleanup complete.")
+
 
 
 
