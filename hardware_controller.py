@@ -30,7 +30,7 @@ class HardwareController:
         # SERVO42C with 12V supply - balanced performance
         # Recommended: 4x microstepping (800 pulses/rev) for 12V operation
         self.SLIDER_PULSES_PER_REV = 200  # 4x microstepping (optimized for 12V)
-        self.SLIDER_MAX_PULSE_RATE = 2500  # SERVO42C with 12V can handle 25kHz+
+        self.SLIDER_MAX_PULSE_RATE = 25000  # SERVO42C with 12V can handle 25kHz+
         
         # --- ADDED: Slider motor limit switches ---
         # NOTE: Adjust these BCM pins to match wiring for the slider rail.
@@ -224,7 +224,7 @@ class HardwareController:
             return 0.01  # Very slow if stopped
         # SERVO42C optimized for 750 RPM maximum
         # 100 = 0.0001s (0.1ms) = 750 RPM, 50 = 0.0002s (0.2ms) = 375 RPM
-        return max(0.0001, 0.01 / (speed / 100.0))
+        return max(0.00001, 0.01 / (speed / 100.0))
     
     def _step_motor(self, delay):
         """Single step with given delay."""
@@ -444,4 +444,5 @@ class HardwareController:
         GPIO.cleanup()
 
         print("GPIO cleanup complete.")
+
 
