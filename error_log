@@ -1,12 +1,10 @@
-VM909 script.js:50 
- POST http://192.168.0.15:5000/api/start 400 (BAD REQUEST)
-(anonymous)	@	VM909 script.js:50
-
-updateUI called with data: {current_angle: 0, is_running: false, is_homed: true, system_message: 'Cycle complete. Processed 10 keys out of 10 positions. Ready.', hall_status: true, …}
-VM909 script.js:129 Hall sensor: ACTIVE
-VM909 script.js:133 Inductive sensor: ACTIVE
-VM909 script.js:137 Slider MIN: INACTIVE
-VM909 script.js:141 Slider MAX: ACTIVE
-VM909 script.js:146 Updating cycles progress: 0 of 0
-
-await fetch('/api/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cycles }) });
+script.js:49 Starting cycle with cycles: 6
+script.js:56 Start cycle response status: 200
+script.js:49 Starting cycle with cycles: 6
+script.js:56 Start cycle response status: 200
+script.js:123 updateUI called with data: {current_angle: 180, is_running: false, is_homed: true, system_message: 'Cycle complete. Processed 6 keys out of 6 positions. Ready.', hall_status: false, …}
+script.js:140 Hall sensor: INACTIVE
+script.js:144 Inductive sensor: ACTIVE
+script.js:148 Slider MIN: INACTIVE
+script.js:152 Slider MAX: ACTIVE
+script.js:157 Updating cycles progress: 0 of 0
