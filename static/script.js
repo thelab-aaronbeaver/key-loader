@@ -155,6 +155,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // --- ADDED: Update cycle progress display ---
         if (cyclesProgressDisplay) {
             console.log('Updating cycles progress:', data.current_cycle, 'of', data.total_cycles);
+            console.log('Full data object:', data);
             if (data.total_cycles > 0) {
                 cyclesProgressDisplay.textContent = `${data.current_cycle} of ${data.total_cycles}`;
             } else {

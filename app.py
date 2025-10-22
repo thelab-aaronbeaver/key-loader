@@ -235,12 +235,8 @@ def run_cycle_background(total_cycles):
         # Get initial state safely
         current_state = safe_get_app_state()
         while keys_processed < total_cycles and current_state["is_running"] and not current_state["stop_requested"] and not current_state["emergency_stop"]:
-            current_position += 1
-            safe_set_app_state("current_cycle", current_position)
-            target_angle = (current_position * config['step_degrees']) % 360
-            
             # Debug: Print cycle progress
-            print(f"Cycle progress: position {current_position} of {total_cycles}, keys processed: {keys_processed}")
+            print(f"Cycle progress: position {current_position}, keys processed: {keys_processed} of {total_cycles}")
             
             # Emit status update to update UI
             emit_status_update()
@@ -257,13 +253,16 @@ def run_cycle_background(total_cycles):
                 break
             
             # Step 1: Key Detection with Proximity Switch
-            safe_set_app_state("system_message", f"Searching for key at position {current_position} of {total_cycles} ({target_angle}°)...")
+            target_angle = (current_position * config['step_degrees']) % 360
+            safe_set_app_state("system_message", f"Searching for key at position {current_position} ({target_angle}°). Keys processed: {keys_processed} of {total_cycles}...")
             emit_status_update()
             
             if hw.read_inductive_sensor():
                 # Key detected - process it
                 keys_processed += 1
-                safe_set_app_state("system_message", f"✅ Key detected at position {current_position} of {total_cycles} ({target_angle}°). Processing key {keys_processed} of {total_cycles}...")
+                current_position += 1  # Only increment position when key is processed
+                safe_set_app_state("current_cycle", keys_processed)  # Update UI with keys processed count
+                safe_set_app_state("system_message", f"✅ Key detected at position {current_position} ({target_angle}°). Processing key {keys_processed} of {total_cycles}...")
                 emit_status_update()
                 
                 # Step 2: Simultaneous Operations
@@ -301,11 +300,29 @@ def run_cycle_background(total_cycles):
                 safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} processed. Waiting {pause_time:.1f}s pause timer...")
                 time.sleep(pause_time)
                 
+                # - Move rotary motor to next position after key processing
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} complete. Moving to next position...")
+                move_success = hw.move_degrees(
+                    config['step_degrees'], 
+                    speed=config['rotary_speed'],
+                    accel_steps=config['rotary_accel_steps'],
+                    decel_steps=config['rotary_decel_steps']
+                )
+                if not move_success:
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Rotary motor stalled after key processing! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
+                    hw.enable_rotary_motor(False)
+                    return
+                
+                safe_set_app_state("current_angle", target_angle)
                 safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} complete. Ready for next position.")
                 
             else:
                 # No key detected - move to next position
-                safe_set_app_state("system_message", f"No key at position {current_position} of {total_cycles} ({target_angle}°). Moving to next position...")
+                current_position += 1  # Increment position counter
+                safe_set_app_state("system_message", f"No key at position {current_position} ({target_angle}°). Moving to next position...")
                 
                 # Move rotary motor by step degrees
                 move_success = hw.move_degrees(
@@ -363,6 +380,10 @@ def run_cycle_background(total_cycles):
             else:
                 safe_set_app_state("system_message", f"Cycle complete. Processed {keys_processed} keys out of {total_cycles} positions. Ready.")
             
+        # Emit final status update BEFORE resetting the cycle counters
+        emit_status_update()
+        
+        # Now reset the cycle state
         safe_update_app_state({
             "is_running": False,
             "current_cycle": 0,
@@ -373,8 +394,6 @@ def run_cycle_background(total_cycles):
         # Don't reset stop flag if emergency stop is active
         if not final_state["emergency_stop"]:
             safe_set_app_state("stop_requested", False)
-            
-        emit_status_update()  # Final status update
         
     except Exception as e:
         safe_update_app_state({
