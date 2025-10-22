@@ -216,7 +216,7 @@ class HardwareController:
             return 0.01  # Very slow if stopped
         # Convert to delay: 100 = 0.0000625s (0.0625ms) = 300 RPM, 1 = 0.00625s (inverse relationship)
         # Optimized for CL57T driver - 300 RPM maximum
-        return max(0.0000625, 0.00625 / (speed / 100.0))
+        return max(0.00000625, 0.00625 / (speed / 100.0))
     
     def _servo42c_speed_to_delay(self, speed):
         """Convert 0-100 speed to delay for SERVO42C (750 RPM maximum)."""
@@ -444,6 +444,7 @@ class HardwareController:
         GPIO.cleanup()
 
         print("GPIO cleanup complete.")
+
 
 
 
