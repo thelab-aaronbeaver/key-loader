@@ -1,12 +1,16 @@
 # In file: app.py
 
 from flask import Flask, render_template, jsonify, request
+from flask_socketio import SocketIO, emit
 from hardware_controller import HardwareController
 import time
 import json
 import os
+import threading
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'key_loader_secret_key_2024'
+socketio = SocketIO(app, cors_allowed_origins="*")
 hw = HardwareController()
 
 # --- MODIFIED: Application State ---
@@ -24,7 +28,13 @@ app_state = {
     "current_cycle": 0,
     "total_cycles": 0,
     # --- ADDED: Fine-tuned home position ---
-    "home_offset": 0.0  # Fine adjustment from hall sensor position
+    "home_offset": 0.0,  # Fine adjustment from hall sensor position
+    # --- ADDED: Stop cycle flag ---
+    "stop_requested": False,
+    # --- ADDED: Background thread reference ---
+    "cycle_thread": None,
+    # --- ADDED: Emergency stop state ---
+    "emergency_stop": False
 }
 
 # --- ADDED: Runtime configuration with JSON persistence ---
@@ -59,6 +69,24 @@ def load_config():
     save_config(default_config)
     return default_config
 
+def emit_status_update():
+    """Emit current status to all connected WebSocket clients."""
+    try:
+        # Update sensor readings
+        app_state["hall_status"] = hw.read_hall_sensor()
+        app_state["inductive_status"] = hw.read_inductive_sensor()
+        try:
+            app_state["slider_min"] = hw.read_slider_min()
+            app_state["slider_max"] = hw.read_slider_max()
+        except AttributeError:
+            app_state["slider_min"] = False
+            app_state["slider_max"] = False
+        
+        # Emit to all connected clients
+        socketio.emit('status_update', app_state)
+    except Exception as e:
+        print(f"Error emitting status update: {e}")
+
 def save_config(config_dict):
     """Save configuration to JSON file."""
     try:
@@ -71,6 +99,24 @@ def save_config(config_dict):
 
 # Load initial config
 config = load_config()
+
+# --- ADDED: WebSocket Event Handlers ---
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection."""
+    print('Client connected')
+    # Send initial status update
+    emit_status_update()
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection."""
+    print('Client disconnected')
+
+@socketio.on('request_status')
+def handle_status_request():
+    """Handle status update request from client."""
+    emit_status_update()
 
 # REMOVED: speed_to_delay() function - now handled by SERVO42C-specific function in hardware_controller.py
 
@@ -124,6 +170,166 @@ def api_set_config():
         return jsonify({"success": False, "message": "Invalid config"}), 400
     return jsonify({"success": True, **config})
 
+# --- ADDED: Background Cycle Function ---
+def run_cycle_background(total_cycles):
+    """Run the main cycle loop in a background thread."""
+    try:
+        # --- UPDATED: Start State - Check hall sensor and position slider OUT ---
+        app_state["system_message"] = "Starting key-driven cycle - checking initial position..."
+        emit_status_update()
+        
+        # Check hall sensor at start position
+        is_hall_active = hw.read_hall_sensor()
+        if not is_hall_active:
+            app_state["system_message"] = "ERROR: Hall sensor not active at start position (0°)!"
+            app_state["is_running"] = False
+            return
+        
+        # Position slider to OUT (MAX) limit switch at start
+        app_state["system_message"] = "Positioning slider to OUT (MAX) position..."
+        accel_steps = config.get('slider_accel_steps', 15)
+        decel_steps = config.get('slider_decel_steps', 15)
+        ultra_fast = config['slider_out_speed'] > 75
+        out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+        
+        if not out_ok:
+            app_state["system_message"] = "ERROR: Slider failed to reach OUT limit switch at start."
+            app_state["is_running"] = False
+            return
+        
+        app_state["system_message"] = "Start state complete. Beginning key detection cycle..."
+
+        # --- UPDATED: Key-driven cycle loop ---
+        keys_processed = 0
+        current_position = 0
+        
+        while keys_processed < total_cycles and app_state["is_running"] and not app_state["stop_requested"] and not app_state["emergency_stop"]:
+            current_position += 1
+            app_state["current_cycle"] = current_position
+            target_angle = (current_position * config['step_degrees']) % 360
+            
+            # Check for emergency stop first
+            if app_state["emergency_stop"]:
+                app_state["system_message"] = "🚨 EMERGENCY STOP ACTIVATED! Cycle terminated immediately."
+                break
+            
+            # Check for stop request
+            if app_state["stop_requested"]:
+                app_state["system_message"] = "Cycle stopped by user request."
+                break
+            
+            # Step 1: Key Detection with Proximity Switch
+            app_state["system_message"] = f"Searching for key at position {current_position} of {total_cycles} ({target_angle}°)..."
+            emit_status_update()
+            
+            if hw.read_inductive_sensor():
+                # Key detected - process it
+                keys_processed += 1
+                app_state["system_message"] = f"✅ Key detected at position {current_position} of {total_cycles} ({target_angle}°). Processing key {keys_processed} of {total_cycles}..."
+                emit_status_update()
+                
+                # Step 2: Simultaneous Operations
+                # - Trigger Pico
+                send_pico_command("keyboard_enter")
+                
+                # - Move slider from MAX to MIN
+                app_state["system_message"] = f"Processing key {keys_processed} of {total_cycles}. Moving slider to MIN position..."
+                ultra_fast = config['slider_in_speed'] > 75
+                in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                
+                if not in_ok:
+                    app_state["system_message"] = "🚨 ERROR: Slider motor stalled moving to MIN! Check for jams and clear obstruction. Motor paused for safety."
+                    hw.enable_slider_motor(False)
+                    app_state["is_running"] = False
+                    return
+                
+                # - Move slider from MIN back to MAX
+                app_state["system_message"] = f"Key {keys_processed} of {total_cycles}. Moving slider back to MAX position..."
+                ultra_fast = config['slider_out_speed'] > 75
+                out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                
+                if not out_ok:
+                    app_state["system_message"] = "🚨 ERROR: Slider motor stalled moving to MAX! Check for jams and clear obstruction. Motor paused for safety."
+                    hw.enable_slider_motor(False)
+                    app_state["is_running"] = False
+                    return
+                
+                # - Start pause timer
+                pause_time = max(config['pause_seconds'], 0)
+                app_state["system_message"] = f"Key {keys_processed} of {total_cycles} processed. Waiting {pause_time:.1f}s pause timer..."
+                time.sleep(pause_time)
+                
+                app_state["system_message"] = f"Key {keys_processed} of {total_cycles} complete. Ready for next position."
+                
+            else:
+                # No key detected - move to next position
+                app_state["system_message"] = f"No key at position {current_position} of {total_cycles} ({target_angle}°). Moving to next position..."
+                
+                # Move rotary motor by step degrees
+                move_success = hw.move_degrees(
+                    config['step_degrees'], 
+                    speed=config['rotary_speed'],
+                    accel_steps=config['rotary_accel_steps'],
+                    decel_steps=config['rotary_decel_steps']
+                )
+                if not move_success:
+                    app_state["system_message"] = "🚨 ERROR: Rotary motor stalled! Check for jams and clear obstruction. Motor paused for safety."
+                    hw.enable_rotary_motor(False)
+                    app_state["is_running"] = False
+                    return
+                
+                app_state["current_angle"] = target_angle
+                
+                # Move slider from MAX to MIN and back to MAX (continuous search pattern)
+                app_state["system_message"] = f"Searching pattern: Moving slider MIN→MAX at position {current_position}..."
+                
+                # Move to MIN
+                ultra_fast = config['slider_in_speed'] > 75
+                in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                
+                if not in_ok:
+                    app_state["system_message"] = "🚨 ERROR: Slider motor stalled during search pattern (MIN)! Check for jams and clear obstruction. Motor paused for safety."
+                    hw.enable_slider_motor(False)
+                    app_state["is_running"] = False
+                    return
+                
+                # Move back to MAX
+                ultra_fast = config['slider_out_speed'] > 75
+                out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                
+                if not out_ok:
+                    app_state["system_message"] = "🚨 ERROR: Slider motor stalled during search pattern (MAX)! Check for jams and clear obstruction. Motor paused for safety."
+                    hw.enable_slider_motor(False)
+                    app_state["is_running"] = False
+                    return
+                
+                app_state["system_message"] = f"Search pattern complete at position {current_position}. Holding at MAX until next cycle."
+
+        # Final cleanup
+        if app_state["is_running"]:
+            if app_state["emergency_stop"]:
+                app_state["system_message"] = f"🚨 EMERGENCY STOP! Cycle terminated. Processed {keys_processed} keys out of {total_cycles} positions."
+            elif app_state["stop_requested"]:
+                app_state["system_message"] = f"Cycle stopped by user. Processed {keys_processed} keys out of {total_cycles} positions. Ready."
+            else:
+                app_state["system_message"] = f"Cycle complete. Processed {keys_processed} keys out of {total_cycles} positions. Ready."
+            
+        app_state["is_running"] = False
+        app_state["current_cycle"] = 0
+        app_state["total_cycles"] = 0
+        if not app_state["emergency_stop"]:  # Don't reset stop flag if emergency stop is active
+            app_state["stop_requested"] = False
+        app_state["cycle_thread"] = None  # Clear thread reference
+        emit_status_update()  # Final status update
+        
+    except Exception as e:
+        app_state["system_message"] = f"🚨 ERROR: Cycle failed with exception: {str(e)}"
+        app_state["is_running"] = False
+        app_state["current_cycle"] = 0
+        app_state["total_cycles"] = 0
+        app_state["stop_requested"] = False
+        app_state["cycle_thread"] = None
+
 # --- ADDED: Homing Route ---
 @app.route('/api/home', methods=['POST'])
 def home_machine():
@@ -161,9 +367,60 @@ def home_machine():
     app_state["is_running"] = False
     return jsonify({"success": success})
 
+# --- ADDED: Stop Cycle Route ---
+@app.route('/api/stop', methods=['POST'])
+def stop_cycle():
+    if not app_state["is_running"]:
+        return jsonify({"error": "No cycle is currently running."}), 400
+    
+    app_state["stop_requested"] = True
+    app_state["system_message"] = "Stop requested. Cycle will stop at next safe point..."
+    emit_status_update()
+    return jsonify({"message": "Stop requested"})
+
+# --- ADDED: Emergency Stop Route ---
+@app.route('/api/emergency_stop', methods=['POST'])
+def emergency_stop():
+    """Immediately halt all motion - true emergency stop."""
+    app_state["emergency_stop"] = True
+    app_state["stop_requested"] = True
+    app_state["is_running"] = False
+    
+    # Immediately disable all motors
+    try:
+        hw.enable_rotary_motor(False)
+        hw.enable_slider_motor(False)
+    except Exception as e:
+        print(f"Error disabling motors during E-Stop: {e}")
+    
+    app_state["system_message"] = "🚨 EMERGENCY STOP ACTIVATED! All motion halted immediately. Check system before restarting."
+    
+    # Reset cycle state
+    app_state["current_cycle"] = 0
+    app_state["total_cycles"] = 0
+    app_state["cycle_thread"] = None
+    
+    # Emit immediate status update
+    emit_status_update()
+    
+    return jsonify({"message": "Emergency stop activated"})
+
+# --- ADDED: Emergency Stop Reset Route ---
+@app.route('/api/emergency_stop_reset', methods=['POST'])
+def emergency_stop_reset():
+    """Reset emergency stop state to allow normal operation."""
+    app_state["emergency_stop"] = False
+    app_state["stop_requested"] = False
+    app_state["system_message"] = "Emergency stop reset. System ready for normal operation."
+    emit_status_update()
+    return jsonify({"message": "Emergency stop reset"})
 
 @app.route('/api/start', methods=['POST'])
 def start_cycle():
+    # --- MODIFIED: Check for emergency stop state ---
+    if app_state["emergency_stop"]:
+        return jsonify({"error": "Emergency stop is active. Reset emergency stop before starting cycle."}), 400
+    
     # --- MODIFIED: Check for homing status before starting ---
     if not app_state["is_homed"]:
         return jsonify({"error": "Machine must be homed before starting a cycle."}), 400
@@ -175,127 +432,22 @@ def start_cycle():
     data = request.get_json(silent=True) or {}
     total_cycles = int(data.get('cycles', config.get('cycles', 10)))
 
+    # Set up cycle state
     app_state["is_running"] = True
     app_state["current_angle"] = 0
     app_state["current_cycle"] = 0
     app_state["total_cycles"] = total_cycles
+    app_state["stop_requested"] = False  # Reset stop flag
 
-    # --- UPDATED: Start State - Check hall sensor and position slider OUT ---
-    app_state["system_message"] = "Starting key-driven cycle - checking initial position..."
+    # Start the cycle in a background thread
+    app_state["cycle_thread"] = threading.Thread(target=run_cycle_background, args=(total_cycles,))
+    app_state["cycle_thread"].daemon = True  # Thread will die when main process dies
+    app_state["cycle_thread"].start()
     
-    # Check hall sensor at start position
-    is_hall_active = hw.read_hall_sensor()
-    if not is_hall_active:
-        app_state["system_message"] = "ERROR: Hall sensor not active at start position (0°)!"
-        app_state["is_running"] = False
-        return jsonify({"error": "Hall sensor not active at start position"}), 400
+    # Emit initial status update
+    emit_status_update()
     
-    # Position slider to OUT (MAX) limit switch at start
-    app_state["system_message"] = "Positioning slider to OUT (MAX) position..."
-    accel_steps = config.get('slider_accel_steps', 15)
-    decel_steps = config.get('slider_decel_steps', 15)
-    ultra_fast = config['slider_out_speed'] > 75
-    out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-    
-    if not out_ok:
-        app_state["system_message"] = "ERROR: Slider failed to reach OUT limit switch at start."
-        app_state["is_running"] = False
-        return jsonify({"error": "Slider failed to reach OUT limit switch at start"}), 400
-    
-    app_state["system_message"] = "Start state complete. Beginning key detection cycle..."
-
-    # --- UPDATED: Key-driven cycle loop ---
-    keys_processed = 0
-    current_position = 0
-    
-    while keys_processed < total_cycles and app_state["is_running"]:
-        current_position += 1
-        app_state["current_cycle"] = current_position
-        target_angle = (current_position * config['step_degrees']) % 360
-        
-        # Step 1: Key Detection with Proximity Switch
-        app_state["system_message"] = f"Searching for key at position {current_position} of {total_cycles} ({target_angle}°)..."
-        
-        if hw.read_inductive_sensor():
-            # Key detected - process it
-            keys_processed += 1
-            app_state["system_message"] = f"✅ Key detected at position {current_position} of {total_cycles} ({target_angle}°). Processing key {keys_processed} of {total_cycles}..."
-            
-            # Step 2: Simultaneous Operations
-            # - Trigger Pico
-            send_pico_command("keyboard_enter")
-            
-            # - Move slider from MAX to MIN
-            app_state["system_message"] = f"Processing key {keys_processed} of {total_cycles}. Moving slider to MIN position..."
-            ultra_fast = config['slider_in_speed'] > 75
-            in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-            
-            if not in_ok:
-                app_state["system_message"] = "ERROR: Slider failed to reach MIN limit switch."
-                break
-            
-            # - Move slider from MIN back to MAX
-            app_state["system_message"] = f"Key {keys_processed} of {total_cycles}. Moving slider back to MAX position..."
-            ultra_fast = config['slider_out_speed'] > 75
-            out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-            
-            if not out_ok:
-                app_state["system_message"] = "ERROR: Slider failed to reach MAX limit switch."
-                break
-            
-            # - Start pause timer
-            pause_time = max(config['pause_seconds'], 0)
-            app_state["system_message"] = f"Key {keys_processed} of {total_cycles} processed. Waiting {pause_time:.1f}s pause timer..."
-            time.sleep(pause_time)
-            
-            app_state["system_message"] = f"Key {keys_processed} of {total_cycles} complete. Ready for next position."
-            
-        else:
-            # No key detected - move to next position
-            app_state["system_message"] = f"No key at position {current_position} of {total_cycles} ({target_angle}°). Moving to next position..."
-            
-            # Move rotary motor by step degrees
-            move_success = hw.move_degrees(
-                config['step_degrees'], 
-                speed=config['rotary_speed'],
-                accel_steps=config['rotary_accel_steps'],
-                decel_steps=config['rotary_decel_steps']
-            )
-            if not move_success:
-                app_state["system_message"] = "ERROR: Motor stalled during movement! Pausing motor and stopping cycle."
-                hw.enable_rotary_motor(False)
-                break
-            
-            app_state["current_angle"] = target_angle
-            
-            # Move slider from MAX to MIN and back to MAX (continuous search pattern)
-            app_state["system_message"] = f"Searching pattern: Moving slider MIN→MAX at position {current_position}..."
-            
-            # Move to MIN
-            ultra_fast = config['slider_in_speed'] > 75
-            in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-            
-            if not in_ok:
-                app_state["system_message"] = "ERROR: Slider failed to reach MIN during search pattern."
-                break
-            
-            # Move back to MAX
-            ultra_fast = config['slider_out_speed'] > 75
-            out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-            
-            if not out_ok:
-                app_state["system_message"] = "ERROR: Slider failed to reach MAX during search pattern."
-                break
-            
-            app_state["system_message"] = f"Search pattern complete at position {current_position}. Holding at MAX until next cycle."
-
-    if app_state["is_running"]:
-        app_state["system_message"] = f"Cycle complete. Processed {keys_processed} keys out of {total_cycles} positions. Ready."
-        
-    app_state["is_running"] = False
-    app_state["current_cycle"] = 0
-    app_state["total_cycles"] = 0
-    return jsonify({"message": "Cycle finished."})
+    return jsonify({"message": "Cycle started in background."})
 
 @app.route('/api/status')
 def get_status():
@@ -454,6 +606,6 @@ def api_pico_test():
 
 if __name__ == '__main__':
     try:
-        app.run(host='0.0.0.0', port=5000)
+        socketio.run(app, host='0.0.0.0', port=5000, debug=True)
     finally:
         hw.cleanup()

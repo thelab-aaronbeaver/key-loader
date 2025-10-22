@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize WebSocket connection
+    const socket = io();
     const btnHome = document.getElementById('btn-home');
     const btnFwd = document.getElementById('btn-move-fwd');
     const btnBwd = document.getElementById('btn-move-bwd');
@@ -149,45 +151,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    async function refreshStatus() {
-        try {
-            const res = await fetch('/api/status');
-            const data = await res.json();
-            
-            // Update sensor indicators
-            if (hall) {
-                hall.classList.toggle('active', !!data.hall_status);
-            }
-            if (inductive) {
-                inductive.classList.toggle('active', !!data.inductive_status);
-            }
-            if (smin) {
-                smin.classList.toggle('active', !!data.slider_min);
-            }
-            if (smax) {
-                smax.classList.toggle('active', !!data.slider_max);
-            }
-            
-            // Update status displays
-            if (sliderStatus) {
-                if (data.is_running) {
-                    sliderStatus.textContent = 'Running';
-                    sliderStatus.className = 'status-text testing';
-                } else {
-                    sliderStatus.textContent = 'Ready';
-                    sliderStatus.className = 'status-text';
-                }
-            }
-            
-            if (picoStatus) {
-                picoStatus.textContent = 'Ready';
-                picoStatus.className = 'status-text';
-            }
-            
-            setBusy(!!data.is_running);
-        } catch (e) {
-            if (msg) msg.textContent = 'Status error: ' + e.message;
+    // WebSocket event handlers
+    socket.on('connect', function() {
+        console.log('Config page connected to server via WebSocket');
+        // Request initial status
+        socket.emit('request_status');
+    });
+
+    socket.on('disconnect', function() {
+        console.log('Config page disconnected from server');
+        if (msg) msg.textContent = 'Connection lost. Attempting to reconnect...';
+    });
+
+    socket.on('status_update', function(data) {
+        updateConfigUI(data);
+    });
+
+    function updateConfigUI(data) {
+        // Update sensor indicators
+        if (hall) {
+            hall.classList.toggle('active', !!data.hall_status);
         }
+        if (inductive) {
+            inductive.classList.toggle('active', !!data.inductive_status);
+        }
+        if (smin) {
+            smin.classList.toggle('active', !!data.slider_min);
+        }
+        if (smax) {
+            smax.classList.toggle('active', !!data.slider_max);
+        }
+        
+        // Update status displays
+        if (sliderStatus) {
+            if (data.is_running) {
+                sliderStatus.textContent = 'Running';
+                sliderStatus.className = 'status-text testing';
+            } else {
+                sliderStatus.textContent = 'Ready';
+                sliderStatus.className = 'status-text';
+            }
+        }
+        
+        if (picoStatus) {
+            picoStatus.textContent = 'Ready';
+            picoStatus.className = 'status-text';
+        }
+        
+        setBusy(!!data.is_running);
     }
 
     async function loadConfig() {
@@ -240,9 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sliderStatus.className = 'status-text';
     picoStatus.className = 'status-text';
 
-    refreshStatus();
     loadConfig();
-    setInterval(refreshStatus, 1000);
 });
 
 

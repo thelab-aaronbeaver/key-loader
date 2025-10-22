@@ -28,6 +28,11 @@
                     placeholder="Cycles">
                 <button id="start-button">Start Cycle</button>
             </div>
+            
+            <div class="emergency-stop-section">
+                <button id="emergency-stop-button" class="btn-emergency-stop">E-STOP</button>
+                <div class="emergency-stop-info">Emergency Stop - Immediately halts all motion</div>
+            </div>
         </div>
         <div class="card">
             <h2>Process Status & Info</h2>
@@ -54,6 +59,7 @@
             <div id="system-message">Ready</div>
         </div>
     </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script src="/static/script.js"></script>
 </body>
 
