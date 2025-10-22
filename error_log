@@ -1,0 +1,64 @@
+:5000/:9  GET c:/Users/elwoo/KeyLoader/key-loader/static/style.css net::ERR_UNKNOWN_URL_SCHEME
+script.js:98 Uncaught (in promise) TypeError: Cannot set properties of null (setting 'textContent')
+    at updateUI (script.js:98:38)
+    at Socket.<anonymous> (script.js:90:9)
+    at Emitter.emit (index.mjs:136:20)
+    at Socket.emitEvent (socket.js:498:20)
+    at socket.js:558:51
+    at Array.forEach (<anonymous>)
+    at Socket.emitBuffered (socket.js:558:28)
+    at Socket.onconnect (socket.js:548:14)
+    at Socket.onpacket (socket.js:447:26)
+    at Emitter.emit (index.mjs:136:20)
+updateUI @ script.js:98
+(anonymous) @ script.js:90
+Emitter.emit @ index.mjs:136
+emitEvent @ socket.js:498
+(anonymous) @ socket.js:558
+emitBuffered @ socket.js:558
+onconnect @ socket.js:548
+onpacket @ socket.js:447
+Emitter.emit @ index.mjs:136
+(anonymous) @ manager.js:204
+Promise.then
+(anonymous) @ websocket-constructor.browser.js:5
+ondecoded @ manager.js:203
+Emitter.emit @ index.mjs:136
+add @ index.js:146
+ondata @ manager.js:190
+Emitter.emit @ index.mjs:136
+onPacket @ socket.js:341
+Emitter.emit @ index.mjs:136
+onPacket @ transport.js:98
+callback @ polling.js:116
+onData @ polling.js:119
+Emitter.emit @ index.mjs:136
+onLoad @ polling.js:352
+xhr.onreadystatechange @ polling.js:288
+XMLHttpRequest.send
+create @ polling.js:298
+Request @ polling.js:237
+request @ polling.js:190
+doPoll @ polling.js:215
+poll @ polling.js:96
+onData @ polling.js:126
+Emitter.emit @ index.mjs:136
+onLoad @ polling.js:352
+xhr.onreadystatechange @ polling.js:288
+XMLHttpRequest.send
+create @ polling.js:298
+Request @ polling.js:237
+request @ polling.js:190
+doPoll @ polling.js:215
+poll @ polling.js:96
+doOpen @ polling.js:56
+open @ transport.js:46
+open @ socket.js:170
+Socket @ socket.js:111
+open @ manager.js:108
+Manager @ manager.js:39
+lookup @ index.js:29
+(anonymous) @ script.js:5
+script.js:32 Uncaught (in promise) TypeError: Cannot set properties of null (setting 'textContent')
+    at HTMLButtonElement.<anonymous> (script.js:32:48)
+(anonymous) @ script.js:32
