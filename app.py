@@ -220,7 +220,7 @@ def run_cycle_background(total_cycles):
             safe_update_app_state({
                 "system_message": "ERROR: Slider failed to reach OUT limit switch at start.",
                 "is_running": False
-            }).
+            })
             return
         
         safe_set_app_state("system_message", "Start state complete. Beginning key detection cycle...")
