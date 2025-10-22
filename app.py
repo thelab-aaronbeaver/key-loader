@@ -104,6 +104,9 @@ def emit_status_update():
             # Create a copy for emission
             state_copy = app_state.copy()
         
+        # Debug: Print the state being emitted
+        print(f"Emitting status update - current_cycle: {state_copy.get('current_cycle', 'N/A')}, total_cycles: {state_copy.get('total_cycles', 'N/A')}")
+        
         # Emit to all connected clients
         socketio.emit('status_update', state_copy)
     except Exception as e:
@@ -235,6 +238,12 @@ def run_cycle_background(total_cycles):
             current_position += 1
             safe_set_app_state("current_cycle", current_position)
             target_angle = (current_position * config['step_degrees']) % 360
+            
+            # Debug: Print cycle progress
+            print(f"Cycle progress: position {current_position} of {total_cycles}, keys processed: {keys_processed}")
+            
+            # Emit status update to update UI
+            emit_status_update()
             
             # Check for emergency stop first
             current_state = safe_get_app_state()

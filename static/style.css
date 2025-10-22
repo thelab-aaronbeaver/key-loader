@@ -103,6 +103,19 @@ h2 {
     background-color: var(--success-color);
 }
 
+.indicator_config.active {
+    background-color: var(--success-color);
+    box-shadow: 0 0 10px var(--success-color);
+}
+
+.indicator_config {
+    transition: all 0.3s ease;
+}
+
+.indicator_config:hover {
+    opacity: 0.8;
+}
+
 #system-message {
     background: var(--msg-bg-color);
     color: var(--msg-text-color);

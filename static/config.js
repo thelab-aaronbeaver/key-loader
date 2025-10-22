@@ -223,15 +223,19 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update sensor indicators
             if (hall) {
                 hall.classList.toggle('active', !!data.hall_status);
+                console.log('Config - Hall sensor:', data.hall_status ? 'ACTIVE' : 'INACTIVE');
             }
             if (inductive) {
                 inductive.classList.toggle('active', !!data.inductive_status);
+                console.log('Config - Inductive sensor:', data.inductive_status ? 'ACTIVE' : 'INACTIVE');
             }
             if (smin) {
                 smin.classList.toggle('active', !!data.slider_min);
+                console.log('Config - Slider MIN:', data.slider_min ? 'ACTIVE' : 'INACTIVE');
             }
             if (smax) {
                 smax.classList.toggle('active', !!data.slider_max);
+                console.log('Config - Slider MAX:', data.slider_max ? 'ACTIVE' : 'INACTIVE');
             }
 
             // Update status displays
