@@ -100,8 +100,8 @@ def emit_status_update():
                 app_state["slider_min"] = False
                 app_state["slider_max"] = False
             
-            # Create a copy for emission
-            state_copy = app_state.copy()
+            # Create a copy for emission, excluding non-serializable objects
+            state_copy = {k: v for k, v in app_state.items() if k != "cycle_thread"}
         
         # Emit to all connected clients
         socketio.emit('status_update', state_copy)
@@ -383,7 +383,27 @@ def run_cycle_background(total_cycles):
             elif final_state["stop_requested"]:
                 safe_set_app_state("system_message", f"Cycle stopped by user. Processed {keys_processed} keys out of {total_cycles} positions. Ready.")
             else:
-                safe_set_app_state("system_message", f"Cycle complete. Processed {keys_processed} keys out of {total_cycles} positions. Ready.")
+                # All keys processed successfully - perform 2 additional step movements
+                safe_set_app_state("system_message", f"All {keys_processed} keys processed. Performing 2 additional steps...")
+                emit_status_update()
+                
+                # Rotate 2 additional steps (2 × step_degrees)
+                for step in range(1, 3):
+                    safe_set_app_state("system_message", f"Additional step {step} of 2 ({config['step_degrees']}°)...")
+                    emit_status_update()
+                    
+                    move_success = hw.move_degrees(
+                        config['step_degrees'],  # One step movement
+                        speed=config['rotary_speed'],
+                        accel_steps=config['rotary_accel_steps'],
+                        decel_steps=config['rotary_decel_steps']
+                    )
+                    
+                    if not move_success:
+                        safe_set_app_state("system_message", f"⚠️ Warning: Additional step {step} failed. Cycle complete but extra steps incomplete.")
+                        break
+                
+                safe_set_app_state("system_message", f"Cycle complete. Processed {keys_processed} keys out of {total_cycles} positions. 2 additional steps complete. Ready.")
             
         # Emit final status update BEFORE resetting the cycle counters
         emit_status_update()
@@ -584,7 +604,8 @@ def get_status():
             # Backward compatibility if methods not present
             app_state["slider_min"] = False
             app_state["slider_max"] = False
-        return jsonify(app_state.copy())
+        # Filter out non-serializable objects (like cycle_thread)
+        return jsonify({k: v for k, v in app_state.items() if k != "cycle_thread"})
 
 # --- ADDED: Rotary controls for config page ---
 @app.route('/api/rotary/home', methods=['POST'])
