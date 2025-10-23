@@ -9,5 +9,9 @@
     "rotary_accel_steps": 50,
     "rotary_decel_steps": 50,
     "cycles": 10,
-    "home_offset": 0.0
+    "home_offset": 0.0,
+    "udp_enabled": true,
+    "udp_ip": "192.168.1.170",
+    "udp_port": 5005,
+    "udp_message": "START"
 }

@@ -17,6 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const sliderStatus = document.getElementById('slider-status');
     const btnPicoTest = document.getElementById('btn-pico-test');
     const picoStatus = document.getElementById('pico-status');
+    const btnLazerTest = document.getElementById('btn-lazer-test');
+    const lazerStatus = document.getElementById('lazer-status');
     const msg = document.getElementById('msg');
     // Config inputs
     const inpStepDeg = document.getElementById('step_degrees');
@@ -29,6 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const inpOutSpeed = document.getElementById('slider_out_speed');
     const inpSliderAccel = document.getElementById('slider_accel_steps');
     const inpSliderDecel = document.getElementById('slider_decel_steps');
+    const inpHomeOffset = document.getElementById('home_offset');
+    const inpLaserIp = document.getElementById('laser_ip');
     const btnSaveCfg = document.getElementById('btn-save-config');
     const hall = document.getElementById('hall');
     const inductive = document.getElementById('inductive');
@@ -41,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnBwd) btnBwd.disabled = b;
         if (btnSliderTest) btnSliderTest.disabled = b;
         if (btnPicoTest) btnPicoTest.disabled = b;
+        if (btnLazerTest) btnLazerTest.disabled = b;
         if (btnSetZero) btnSetZero.disabled = b;
         if (btnSaveCfg) btnSaveCfg.disabled = b;
     }
@@ -189,6 +194,44 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (btnLazerTest) {
+        btnLazerTest.addEventListener('click', async () => {
+            if (lazerStatus) {
+                lazerStatus.textContent = 'Testing UDP trigger...';
+                lazerStatus.className = 'status-text testing';
+            }
+            if (msg) msg.textContent = 'Sending UDP trigger to LightBurn (192.168.1.170:5005)...';
+            setBusy(true);
+            try {
+                const data = await postJSON('/api/udp/test');
+                if (lazerStatus) {
+                    if (data.success) {
+                        lazerStatus.textContent = 'UDP Sent';
+                        lazerStatus.className = 'status-text complete';
+                    } else {
+                        lazerStatus.textContent = 'Test Failed';
+                        lazerStatus.className = 'status-text failed';
+                    }
+                }
+                if (msg) {
+                    if (data.success) {
+                        msg.textContent = 'UDP trigger sent successfully - check Mac console for confirmation';
+                    } else {
+                        msg.textContent = data.message || 'UDP test failed - check network and listener';
+                    }
+                }
+            } catch (e) {
+                if (lazerStatus) {
+                    lazerStatus.textContent = 'Test Error';
+                    lazerStatus.className = 'status-text failed';
+                }
+                if (msg) msg.textContent = 'Error: ' + e.message;
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
     // WebSocket event handlers (only if socket is available)
     if (socket) {
         socket.on('connect', function () {
@@ -254,6 +297,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 picoStatus.className = 'status-text';
             }
 
+            if (lazerStatus) {
+                lazerStatus.textContent = 'Ready';
+                lazerStatus.className = 'status-text';
+            }
+
             // Update system message
             if (msg && data.system_message) {
                 msg.textContent = data.system_message;
@@ -279,6 +327,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inpOutSpeed) inpOutSpeed.value = cfg.slider_out_speed;
             if (inpSliderAccel) inpSliderAccel.value = cfg.slider_accel_steps || 15;
             if (inpSliderDecel) inpSliderDecel.value = cfg.slider_decel_steps || 15;
+            if (inpHomeOffset) inpHomeOffset.value = cfg.home_offset || 0.0;
+            if (inpLaserIp) inpLaserIp.value = cfg.udp_ip || '192.168.1.170';
         } catch (e) {
             if (msg) msg.textContent = 'Load config error: ' + e.message;
         }
@@ -301,7 +351,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         slider_in_speed: parseInt(inpInSpeed?.value || 80, 10),
                         slider_out_speed: parseInt(inpOutSpeed?.value || 80, 10),
                         slider_accel_steps: parseInt(inpSliderAccel?.value || 15, 10),
-                        slider_decel_steps: parseInt(inpSliderDecel?.value || 15, 10)
+                        slider_decel_steps: parseInt(inpSliderDecel?.value || 15, 10),
+                        home_offset: parseFloat(inpHomeOffset?.value || 0.0),
+                        udp_ip: inpLaserIp?.value || '192.168.1.170'
                     })
                 });
                 const data = await res.json();
@@ -316,6 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize status elements
     if (sliderStatus) sliderStatus.className = 'status-text';
     if (picoStatus) picoStatus.className = 'status-text';
+    if (lazerStatus) lazerStatus.className = 'status-text';
 
     // Load configuration and start fallback polling if WebSocket is not available
     loadConfig();

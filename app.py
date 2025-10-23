@@ -7,6 +7,7 @@ import time
 import json
 import os
 import threading
+import socket
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'key_loader_secret_key_2024'
@@ -54,7 +55,11 @@ def load_config():
         "rotary_accel_steps": 50,   # steps for acceleration ramp-up - reduced for faster acceleration
         "rotary_decel_steps": 50,   # steps for deceleration ramp-down - reduced for faster deceleration
         "cycles": 10,               # default cycle count
-        "home_offset": 0.0          # fine-tuned home position offset from hall sensor (degrees)
+        "home_offset": 0.0,         # fine-tuned home position offset from hall sensor (degrees)
+        "udp_enabled": True,        # enable UDP trigger to LightBurn
+        "udp_ip": "127.0.0.1",      # UDP target IP (localhost for same machine)
+        "udp_port": 5005,           # UDP port number
+        "udp_message": "START"      # UDP trigger message
     }
     
     if os.path.exists(CONFIG_FILE):
@@ -141,12 +146,44 @@ def handle_status_request():
 
 # REMOVED: speed_to_delay() function - now handled by SERVO42C-specific function in hardware_controller.py
 
+def send_udp_trigger():
+    """Send UDP trigger message to LightBurn."""
+    if not config.get("udp_enabled", False):
+        print("⏭️  UDP trigger disabled in config")
+        return False
+    
+    try:
+        udp_ip = config.get("udp_ip", "127.0.0.1")
+        udp_port = config.get("udp_port", 5005)
+        udp_message = config.get("udp_message", "START")
+        
+        # Create UDP socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(1.0)  # 1 second timeout
+        
+        # Send UDP message
+        sock.sendto(udp_message.encode('utf-8'), (udp_ip, udp_port))
+        sock.close()
+        
+        print(f"📡 UDP trigger sent to {udp_ip}:{udp_port} - Message: '{udp_message}'")
+        return True
+        
+    except socket.timeout:
+        print(f"⏱️  UDP trigger timeout to {udp_ip}:{udp_port}")
+        return False
+    except Exception as e:
+        print(f"❌ UDP trigger error: {e}")
+        return False
+
 def send_pico_command(command):
     """Send command to Raspberry Pico via GPIO trigger pulse to emulate keyboard press."""
     print(f"📡 Sending to Pico: {command} (emulating keyboard Enter press)")
     
     # Trigger Pico via GPIO pin (100ms pulse) to emulate keyboard Enter
     hw.trigger_pico(duration_ms=100)
+    
+    # Also send UDP trigger to LightBurn
+    send_udp_trigger()
 
 @app.route('/')
 def index():
@@ -188,6 +225,14 @@ def api_set_config():
             config['cycles'] = int(data['cycles'])
         if 'home_offset' in data:
             config['home_offset'] = float(data['home_offset'])
+        if 'udp_enabled' in data:
+            config['udp_enabled'] = bool(data['udp_enabled'])
+        if 'udp_ip' in data:
+            config['udp_ip'] = str(data['udp_ip'])
+        if 'udp_port' in data:
+            config['udp_port'] = int(data['udp_port'])
+        if 'udp_message' in data:
+            config['udp_message'] = str(data['udp_message'])
         
         # Save to file
         if not save_config(config):
@@ -755,6 +800,36 @@ def api_slider_test_cycle():
         safe_set_app_state("is_running", False)
 
 # --- ADDED: Pico test endpoint ---
+@app.route('/api/udp/test', methods=['POST'])
+def api_udp_test():
+    """Test UDP trigger functionality"""
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+    
+    try:
+        safe_update_app_state({
+            "is_running": True,
+            "system_message": "Testing UDP trigger to LightBurn..."
+        })
+        
+        # Send UDP trigger
+        success = send_udp_trigger()
+        
+        if success:
+            safe_set_app_state("system_message", "UDP trigger sent successfully to LightBurn")
+            return jsonify({"success": True, "message": "UDP trigger sent"})
+        else:
+            safe_set_app_state("system_message", "UDP trigger failed - check config and network")
+            return jsonify({"success": False, "message": "UDP trigger failed"})
+        
+    except Exception as e:
+        safe_set_app_state("system_message", f"UDP test error: {str(e)}")
+        final_state = safe_get_app_state()
+        return jsonify({"success": False, "message": final_state["system_message"]})
+    finally:
+        safe_set_app_state("is_running", False)
+
 @app.route('/api/pico/test', methods=['POST'])
 def api_pico_test():
     """Test Pico trigger functionality"""
