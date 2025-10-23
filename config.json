@@ -8,5 +8,6 @@
     "rotary_speed": 100,
     "rotary_accel_steps": 50,
     "rotary_decel_steps": 50,
-    "cycles": 10
+    "cycles": 10,
+    "home_offset": 0.0
 }

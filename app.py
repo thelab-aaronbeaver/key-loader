@@ -30,8 +30,6 @@ app_state = {
     # --- ADDED: Cycle progress tracking ---
     "current_cycle": 0,
     "total_cycles": 0,
-    # --- ADDED: Fine-tuned home position ---
-    "home_offset": 0.0,  # Fine adjustment from hall sensor position
     # --- ADDED: Stop cycle flag ---
     "stop_requested": False,
     # --- ADDED: Background thread reference ---
@@ -55,7 +53,8 @@ def load_config():
         "rotary_speed": 100,        # 0-100 speed scale for rotary motor - MAXIMUM SPEED
         "rotary_accel_steps": 50,   # steps for acceleration ramp-up - reduced for faster acceleration
         "rotary_decel_steps": 50,   # steps for deceleration ramp-down - reduced for faster deceleration
-        "cycles": 10                # default cycle count
+        "cycles": 10,               # default cycle count
+        "home_offset": 0.0          # fine-tuned home position offset from hall sensor (degrees)
     }
     
     if os.path.exists(CONFIG_FILE):
@@ -103,9 +102,6 @@ def emit_status_update():
             
             # Create a copy for emission
             state_copy = app_state.copy()
-        
-        # Debug: Print the state being emitted
-        print(f"Emitting status update - current_cycle: {state_copy.get('current_cycle', 'N/A')}, total_cycles: {state_copy.get('total_cycles', 'N/A')}")
         
         # Emit to all connected clients
         socketio.emit('status_update', state_copy)
@@ -178,6 +174,10 @@ def api_set_config():
             config['slider_in_speed'] = max(0, min(100, int(data['slider_in_speed'])))  # allow up to 100 for 750 RPM maximum
         if 'slider_out_speed' in data:
             config['slider_out_speed'] = max(0, min(100, int(data['slider_out_speed'])))  # allow up to 100 for 750 RPM maximum
+        if 'slider_accel_steps' in data:
+            config['slider_accel_steps'] = max(1, int(data['slider_accel_steps']))  # minimum 1 step
+        if 'slider_decel_steps' in data:
+            config['slider_decel_steps'] = max(1, int(data['slider_decel_steps']))  # minimum 1 step
         if 'rotary_speed' in data:
             config['rotary_speed'] = max(0, min(100, int(data['rotary_speed'])))  # clamp 0-100
         if 'rotary_accel_steps' in data:
@@ -186,6 +186,8 @@ def api_set_config():
             config['rotary_decel_steps'] = max(1, int(data['rotary_decel_steps']))  # minimum 1 step
         if 'cycles' in data:
             config['cycles'] = int(data['cycles'])
+        if 'home_offset' in data:
+            config['home_offset'] = float(data['home_offset'])
         
         # Save to file
         if not save_config(config):
@@ -424,12 +426,11 @@ def home_machine():
     success = hw.home_table()
     
     if success:
-        # Apply fine-tuned home offset if it exists
-        current_state = safe_get_app_state()
-        if current_state["home_offset"] != 0.0:
-            safe_set_app_state("system_message", f"Applying fine adjustment of {current_state['home_offset']:.1f}°...")
+        # Apply fine-tuned home offset from config if it exists
+        if config.get("home_offset", 0.0) != 0.0:
+            safe_set_app_state("system_message", f"Applying fine adjustment of {config['home_offset']:.1f}°...")
             move_success = hw.move_degrees(
-                current_state["home_offset"], 
+                config['home_offset'], 
                 speed=config['rotary_speed'],
                 accel_steps=config['rotary_accel_steps'],
                 decel_steps=config['rotary_decel_steps']
@@ -665,20 +666,23 @@ def api_rotary_set_zero():
     # This represents the fine adjustment needed from the hall sensor
     home_offset = current_state["current_angle"]
     
+    # Save the home offset to config.json so it persists
+    config["home_offset"] = home_offset
+    save_config(config)
+    
     if home_offset == 0.0:
-        system_message = "Current position set as 0° (no offset from hall sensor)."
+        system_message = "Current position set as 0° (no offset from hall sensor). Saved to config."
     else:
-        system_message = f"Current position set as 0°. Home offset: {home_offset:.1f}° from hall sensor."
+        system_message = f"Current position set as 0°. Home offset: {home_offset:.1f}° from hall sensor. Saved to config."
     
     safe_update_app_state({
-        "home_offset": home_offset,
         "current_angle": 0,
         "is_homed": True,
         "system_message": system_message
     })
     
     final_state = safe_get_app_state()
-    return jsonify({"success": True, "message": final_state["system_message"], "current_angle": final_state["current_angle"], "home_offset": final_state["home_offset"]})
+    return jsonify({"success": True, "message": final_state["system_message"], "current_angle": final_state["current_angle"], "home_offset": config["home_offset"]})
 
 # --- ADDED: Slider test cycle ---
 @app.route('/api/slider/test_cycle', methods=['POST'])
@@ -766,8 +770,23 @@ def api_pico_test():
         safe_set_app_state("is_running", False)
 
 
+def status_broadcast_thread():
+    """Background thread that continuously broadcasts sensor status updates."""
+    print("✅ Status broadcast thread started")
+    while True:
+        try:
+            emit_status_update()
+            time.sleep(0.2)  # Update 5 times per second
+        except Exception as e:
+            print(f"Error in status broadcast thread: {e}")
+            time.sleep(1)  # Back off on errors
+
 if __name__ == '__main__':
     try:
+        # Start background status broadcasting thread
+        status_thread = threading.Thread(target=status_broadcast_thread, daemon=True)
+        status_thread.start()
+        
         socketio.run(app, host='0.0.0.0', port=5000, debug=True)
     finally:
         hw.cleanup()

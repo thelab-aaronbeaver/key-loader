@@ -18,16 +18,16 @@
         </div>
         <div class="card">
             <h2>Process Control</h2>
-            
+
             <div class="button-group">
                 <button id="home-button">Home Machine</button>
                 <p>Total Cycles (Keys to Process)</p>
                 <input id="cycles" type="number" min="1" value="10"
                     style="flex:0 0 100px; padding: 12px; border-radius: 5px; border: 1px solid #ccc;"
-                    placeholder="Cycles">
+                    placeholder="Cycles" title="Loaded from configuration">
                 <button id="start-button">Start Cycle</button>
             </div>
-            
+
             <div class="emergency-stop-section">
                 <button id="emergency-stop-button" class="btn-emergency-stop">E-STOP</button>
                 <div class="emergency-stop-info">Emergency Stop - Immediately halts all motion</div>
@@ -37,7 +37,8 @@
             <h2>Process Status & Info</h2>
             <div class="row">
                 <div class="flex-container">
-                    <div class="flex-item">Cycles Progress<span id="cycles-progress" class="status-value">0 of 0</span></div>
+                    <div class="flex-item">Cycles Progress<span id="cycles-progress" class="status-value">0 of 0</span>
+                    </div>
                     <div class="flex-item"><span class="divider"></span></div>
                     <div class="flex-item">Home<span id="hall" class="indicator_config"></span></div>
                     <div class="flex-item"><span class="divider"></span></div>

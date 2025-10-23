@@ -216,6 +216,24 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // Load configuration on page load
+    async function loadConfig() {
+        try {
+            const res = await fetch('/api/config');
+            const cfg = await res.json();
+            const cyclesInput = document.getElementById('cycles');
+            if (cyclesInput && cfg.cycles) {
+                cyclesInput.value = cfg.cycles;
+                console.log('Loaded cycles from config:', cfg.cycles);
+            }
+        } catch (e) {
+            console.error('Load config error:', e);
+        }
+    }
+
+    // Initialize: Load config first
+    loadConfig();
+
     // Start fallback polling if WebSocket is not available
     if (!socket) {
         console.log('WebSocket not available, using polling fallback');
