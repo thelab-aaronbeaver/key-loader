@@ -742,17 +742,8 @@ def api_slider_test_cycle():
             final_state = safe_get_app_state()
             return jsonify({"success": False, "message": final_state["system_message"]})
         
-        # Step 3: Return to MIN limit switch
-        safe_set_app_state("system_message", "Returning slider to MIN position...")
-        ultra_fast = config['slider_in_speed'] > 75
-        return_success = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-        
-        if not return_success:
-            safe_set_app_state("system_message", "ERROR: Failed to return to MIN limit switch")
-            final_state = safe_get_app_state()
-            return jsonify({"success": False, "message": final_state["system_message"]})
-        
-        safe_set_app_state("system_message", "Slider test cycle completed successfully")
+        # Test complete - slider is now at MAX position
+        safe_set_app_state("system_message", "Slider test complete. Slider is at MAX position.")
         final_state = safe_get_app_state()
         return jsonify({"success": True, "message": final_state["system_message"]})
         
