@@ -129,35 +129,49 @@ class LightBurnController:
         
         Returns:
             True if busy, False if idle, None if unable to determine
+        
+        LightBurn Status Responses:
+        - Idle/Ready: "OK" or "ok"
+        - Job Running: "!" 
         """
         status = self.get_status()
         if status is None:
             return None
         
-        # Check various status indicators
+        # Convert status to string for checking
         status_str = str(status).lower()
         
-        # LightBurn is busy if status contains these keywords
-        busy_keywords = ['running', 'busy', 'active', 'working', 'processing']
-        idle_keywords = ['idle', 'ready', 'waiting', 'stopped', 'finished', 'complete']
+        # LightBurn is BUSY if status contains "!"
+        if '!' in status_str:
+            return True
         
-        for keyword in busy_keywords:
-            if keyword in status_str:
+        # LightBurn is IDLE if status contains "ok"
+        if 'ok' in status_str:
+            return False
+        
+        # Check raw_response if available (for dict format)
+        if isinstance(status, dict):
+            raw = status.get('raw_response', '').lower()
+            status_val = status.get('status', '').lower()
+            
+            # Check for busy indicator "!"
+            if '!' in raw or '!' in status_val:
                 return True
-        
-        for keyword in idle_keywords:
-            if keyword in status_str:
+            
+            # Check for idle indicator "ok"
+            if 'ok' in raw or 'ok' in status_val:
                 return False
         
         # Unable to determine
+        print(f"⚠️  Unable to determine LightBurn status from: {status}")
         return None
     
-    def wait_for_completion(self, poll_interval=0.5, max_wait=300):
+    def wait_for_completion(self, poll_interval=0.1, max_wait=300):
         """
         Wait for LightBurn to complete the current job.
         
         Args:
-            poll_interval: How often to check status (seconds)
+            poll_interval: How often to check status (seconds, default 0.1s = 100ms)
             max_wait: Maximum time to wait (seconds)
             
         Returns:
@@ -165,7 +179,13 @@ class LightBurnController:
         """
         start_time = time.time()
         
-        print(f"⏳ Waiting for LightBurn job completion (max {max_wait}s)...")
+        print(f"⏳ Waiting for LightBurn job completion (polling every {poll_interval*1000:.0f}ms, max {max_wait}s)...")
+        
+        # Initial small delay to let job start
+        time.sleep(0.2)
+        
+        last_log_time = start_time
+        log_interval = 2.0  # Log status every 2 seconds to reduce console spam
         
         while True:
             elapsed = time.time() - start_time
@@ -176,21 +196,27 @@ class LightBurnController:
                 return False
             
             # Check status
+            status = self.get_status()
             is_busy = self.is_busy()
             
             if is_busy is None:
                 # Unable to get status - LightBurn might be offline
-                print(f"⚠️  Unable to get LightBurn status (elapsed: {elapsed:.1f}s)")
+                if time.time() - last_log_time >= log_interval:
+                    print(f"⚠️  Unable to get LightBurn status (elapsed: {elapsed:.1f}s)")
+                    last_log_time = time.time()
                 time.sleep(poll_interval)
                 continue
             
             if not is_busy:
-                # Job complete
-                print(f"✅ LightBurn job completed (elapsed: {elapsed:.1f}s)")
+                # Job complete - status should be "OK" or "ok"
+                print(f"✅ LightBurn job completed - Status: IDLE (elapsed: {elapsed:.1f}s)")
                 return True
             
-            # Still busy, wait and check again
-            print(f"⏳ LightBurn busy... (elapsed: {elapsed:.1f}s)")
+            # Still busy - status should be "!"
+            if time.time() - last_log_time >= log_interval:
+                print(f"⏳ LightBurn job running - Status: BUSY (elapsed: {elapsed:.1f}s)")
+                last_log_time = time.time()
+            
             time.sleep(poll_interval)
     
     def close(self):

@@ -19,7 +19,7 @@
     "lightburn_out_port": 19840,
     "lightburn_in_port": 19841,
     "lightburn_timeout": 2.0,
-    "lightburn_poll_interval": 0.5,
+    "lightburn_poll_interval": 0.1,
     "lightburn_max_wait": 300,
     "use_lightburn_status": true
 }

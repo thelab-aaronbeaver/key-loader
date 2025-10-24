@@ -60,7 +60,15 @@ def load_config():
         "udp_enabled": True,        # enable UDP trigger to LightBurn
         "udp_ip": "127.0.0.1",      # UDP target IP (localhost for same machine)
         "udp_port": 5005,           # UDP port number
-        "udp_message": "START"      # UDP trigger message
+        "udp_message": "START",     # UDP trigger message
+        "lightburn_enabled": True,  # enable LightBurn automation
+        "lightburn_ip": "192.168.1.170",  # IP of Mac running LightBurn
+        "lightburn_out_port": 19840,      # LightBurn UDP command port
+        "lightburn_in_port": 19841,       # LightBurn UDP response port
+        "lightburn_timeout": 2.0,         # Response timeout in seconds
+        "lightburn_poll_interval": 0.1,   # Status check interval (100ms)
+        "lightburn_max_wait": 300,        # Max wait for job completion (5 min)
+        "use_lightburn_status": True      # Use status monitoring vs pause timer
     }
     
     if os.path.exists(CONFIG_FILE):
