@@ -27,11 +27,20 @@
                     placeholder="Cycles" title="Loaded from configuration">
                 <button id="start-button">Start Cycle</button>
             </div>
+            <div class="row">
+                <div class="flex-item">
+                    <div class="emergency-stop-section">
+                        <button id="emergency-stop-button" class="btn-emergency-stop">E-STOP</button>
+                        <div class="emergency-stop-info">Emergency Stop - Immediately halts all motion</div>
+                    </div>
+                </div>
 
-            <div class="emergency-stop-section">
-                <button id="emergency-stop-button" class="btn-emergency-stop">E-STOP</button>
-                <div class="emergency-stop-info">Emergency Stop - Immediately halts all motion</div>
+                <div class="flex-item">
+                    <h2>System</h2>
+                    <div id="system-message">Ready</div>
+                </div>
             </div>
+
         </div>
         <div class="card">
             <h2>Process Status & Info</h2>
@@ -49,8 +58,6 @@
                     <div class="flex-item">Slider OUT <span id="smax" class="indicator_config"></span></div>
                     <div class="flex-item"><span class="divider"></span></div>
                     <div class="flex-item">Slider Status <span id="slider-status" class="status-text">Ready</span></div>
-                    <div class="flex-item"><span class="divider"></span></div>
-                    <div class="flex-item">Pico Status <span id="pico-status" class="status-text">Ready</span></div>
                 </div>
             </div>
         </div>

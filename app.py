@@ -264,12 +264,9 @@ def wait_for_lightburn_completion():
         time.sleep(pause_time)
         return False
 
-def send_pico_command(command):
-    """Send command to Raspberry Pico via GPIO trigger pulse to emulate keyboard press."""
-    print(f"📡 Sending to Pico: {command} (emulating keyboard Enter press)")
-    
-    # Trigger Pico via GPIO pin (100ms pulse) to emulate keyboard Enter
-    hw.trigger_pico(duration_ms=100)
+def trigger_lightburn_job():
+    """Trigger LightBurn to start the current job."""
+    print(f"📡 Triggering LightBurn job...")
     
     # Send LightBurn start command via UDP automation protocol
     if config.get("lightburn_enabled", True):
@@ -373,6 +370,11 @@ def api_set_config():
 # --- ADDED: Background Cycle Function ---
 def run_cycle_background(total_cycles):
     """Run the main cycle loop in a background thread."""
+    cycle_start_time = time.time()
+    print(f"\n{'='*80}")
+    print(f"🚀 CYCLE STARTED - Processing {total_cycles} keys")
+    print(f"{'='*80}\n")
+    
     try:
         # --- UPDATED: Start State - Check hall sensor and position slider OUT ---
         safe_set_app_state("system_message", "Starting key-driven cycle - checking initial position...")
@@ -434,25 +436,34 @@ def run_cycle_background(total_cycles):
             
             if hw.read_inductive_sensor():
                 # Key detected - process it
+                key_start_time = time.time()
                 keys_processed += 1
                 current_position += 1  # Only increment position when key is processed
                 safe_set_app_state("current_cycle", keys_processed)  # Update UI with keys processed count
                 safe_set_app_state("system_message", f"✅ Key detected at position {current_position} ({target_angle}°). Processing key {keys_processed} of {total_cycles}...")
                 emit_status_update()
+                print(f"\n{'─'*80}")
+                print(f"🔑 KEY {keys_processed}/{total_cycles} - Position {current_position} ({target_angle}°)")
+                print(f"{'─'*80}")
                 
                 # Step 2: Key Processing Sequence (Reordered)
-                # 1. Trigger Pico and start LightBurn job
-                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Triggering Pico and starting LightBurn job...")
-                send_pico_command("keyboard_enter")
+                # 1. Start LightBurn job
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Starting LightBurn job...")
+                lightburn_start_time = time.time()
+                trigger_lightburn_job()
                 
                 # 2. Wait for LightBurn job completion (or use pause timer if disabled)
                 if config.get("use_lightburn_status", True):
                     safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Waiting for LightBurn job completion...")
                     wait_for_lightburn_completion()
+                    lightburn_duration = time.time() - lightburn_start_time
+                    print(f"⏱️  LightBurn job duration: {lightburn_duration:.2f}s")
                 else:
                     pause_time = max(config.get('pause_seconds', 1.0), 0)
                     safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Waiting {pause_time:.1f}s pause timer...")
                     time.sleep(pause_time)
+                    lightburn_duration = pause_time
+                    print(f"⏱️  Pause timer: {lightburn_duration:.2f}s")
                 
                 # 3. Move rotary motor to next position
                 safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving rotary to next position...")
@@ -499,7 +510,10 @@ def run_cycle_background(total_cycles):
                     return
                 
                 # 6. Key processing complete
+                key_duration = time.time() - key_start_time
                 safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} complete. Ready for next search.")
+                print(f"✅ Key {keys_processed} complete - Total time: {key_duration:.2f}s (LightBurn: {lightburn_duration:.2f}s)")
+                print(f"{'─'*80}\n")
                 
             else:
                 # No key detected - move to next position
@@ -552,13 +566,25 @@ def run_cycle_background(total_cycles):
                 
                 safe_set_app_state("system_message", f"Search pattern complete at position {current_position}. Holding at MAX until next cycle.")
 
-        # Final cleanup
+        # Final cleanup and statistics
+        cycle_duration = time.time() - cycle_start_time
         final_state = safe_get_app_state()
+        
+        print(f"\n{'='*80}")
+        print(f"📊 CYCLE STATISTICS")
+        print(f"{'='*80}")
+        print(f"Keys Processed: {keys_processed}/{total_cycles}")
+        print(f"Total Cycle Time: {cycle_duration:.2f}s ({cycle_duration/60:.1f} minutes)")
+        if keys_processed > 0:
+            avg_per_key = cycle_duration / keys_processed
+            print(f"Average Time per Key: {avg_per_key:.2f}s")
+        print(f"{'='*80}\n")
+        
         if final_state["is_running"]:
             if final_state["emergency_stop"]:
-                safe_set_app_state("system_message", f"🚨 EMERGENCY STOP! Cycle terminated. Processed {keys_processed} keys out of {total_cycles} positions.")
+                safe_set_app_state("system_message", f"🚨 EMERGENCY STOP! Cycle terminated. Processed {keys_processed} keys in {cycle_duration:.1f}s.")
             elif final_state["stop_requested"]:
-                safe_set_app_state("system_message", f"Cycle stopped by user. Processed {keys_processed} keys out of {total_cycles} positions. Ready.")
+                safe_set_app_state("system_message", f"Cycle stopped by user. Processed {keys_processed} keys in {cycle_duration:.1f}s. Ready.")
             else:
                 # All keys processed successfully - perform 2 additional step movements
                 safe_set_app_state("system_message", f"All {keys_processed} keys processed. Performing 2 additional steps...")
@@ -580,7 +606,7 @@ def run_cycle_background(total_cycles):
                         safe_set_app_state("system_message", f"⚠️ Warning: Additional step {step} failed. Cycle complete but extra steps incomplete.")
                         break
                 
-                safe_set_app_state("system_message", f"Cycle complete. Processed {keys_processed} keys out of {total_cycles} positions. 2 additional steps complete. Ready.")
+                safe_set_app_state("system_message", f"Cycle complete. Processed {keys_processed} keys in {cycle_duration:.1f}s. 2 additional steps complete. Ready.")
             
         # Emit final status update BEFORE resetting the cycle counters
         emit_status_update()
@@ -962,33 +988,7 @@ def api_udp_test():
     finally:
         safe_set_app_state("is_running", False)
 
-@app.route('/api/pico/test', methods=['POST'])
-def api_pico_test():
-    """Test Pico trigger functionality"""
-    current_state = safe_get_app_state()
-    if current_state["is_running"]:
-        return jsonify({"success": False, "message": "Busy"}), 400
-    
-    try:
-        safe_update_app_state({
-            "is_running": True,
-            "system_message": "Testing Pico trigger..."
-        })
-        
-        # Send trigger pulse to Pico
-        hw.trigger_pico(duration_ms=100)
-        
-        safe_set_app_state("system_message", "Pico trigger sent successfully")
-        return jsonify({"success": True, "message": "Pico trigger sent"})
-        
-    except Exception as e:
-        safe_set_app_state("system_message", f"Pico test error: {str(e)}")
-        final_state = safe_get_app_state()
-        return jsonify({"success": False, "message": final_state["system_message"]})
-    finally:
-        safe_set_app_state("is_running", False)
-
-# --- ADDED: LightBurn test endpoints ---
+# --- LightBurn test endpoints ---
 @app.route('/api/lightburn/ping', methods=['POST'])
 def api_lightburn_ping():
     """Test LightBurn connection"""

@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const sliderMinIndicator = document.getElementById('smin');
     const sliderMaxIndicator = document.getElementById('smax');
     const sliderStatusDisplay = document.getElementById('slider-status');
-    const picoStatusDisplay = document.getElementById('pico-status');
     const cyclesProgressDisplay = document.getElementById('cycles-progress');
     const currentPositionDisplay = document.getElementById('current-position'); // May not exist
 

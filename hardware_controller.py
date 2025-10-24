@@ -36,9 +36,6 @@ class HardwareController:
         # NOTE: Adjust these BCM pins to match wiring for the slider rail.
         self.SLIDER_MIN_PIN = 27
         self.SLIDER_MAX_PIN = 17
-        
-        # --- ADDED: Pico communication pin ---
-        self.PICO_TRIGGER_PIN = 4  # GPIO pin to trigger Raspberry Pico
 
         # --- MODIFIED: Motor Configuration for CL57T Driver (Rotary) ---
         # CL57T is configured for 3200 pulses per revolution (16x microstepping on 1.8° motor).
@@ -75,10 +72,6 @@ class HardwareController:
         GPIO.setup(self.SLIDER_ENABLE_PIN, GPIO.OUT)
         GPIO.setup(self.SLIDER_ALM_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         
-        # --- ADDED: Setup Pico trigger pin ---
-        GPIO.setup(self.PICO_TRIGGER_PIN, GPIO.OUT)
-        GPIO.output(self.PICO_TRIGGER_PIN, GPIO.LOW)  # Initialize LOW (inactive)
-        
         # Initialize enable pins (motors disabled by default)
         GPIO.output(self.ENABLE_PIN, GPIO.HIGH)  # HIGH = disabled for most drivers
         GPIO.output(self.SLIDER_ENABLE_PIN, GPIO.HIGH)  # HIGH = disabled for most drivers
@@ -105,17 +98,6 @@ class HardwareController:
         """Return True if the slider driver reports a fault/stall (ALM active)."""
         # Most drivers expose ALM as active-low (LOW = fault). Adjust if needed.
         return GPIO.input(self.SLIDER_ALM_PIN) == GPIO.LOW
-
-    def trigger_pico(self, duration_ms=100):
-        """Send a trigger pulse to the Raspberry Pico via GPIO pin."""
-        print(f"📡 Triggering Pico via GPIO {self.PICO_TRIGGER_PIN} for {duration_ms}ms")
-        
-        # Send HIGH pulse to trigger Pico
-        GPIO.output(self.PICO_TRIGGER_PIN, GPIO.HIGH)
-        time.sleep(duration_ms / 1000.0)  # Convert ms to seconds
-        GPIO.output(self.PICO_TRIGGER_PIN, GPIO.LOW)
-        
-        print(f"✅ Pico trigger pulse sent")
 
     # --- MODIFIED: Homing Method (use hall sensor for home detection) ---
     def home_table(self):

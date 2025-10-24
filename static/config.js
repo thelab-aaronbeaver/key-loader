@@ -15,8 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnSetZero = document.getElementById('btn-set-zero');
     const btnSliderTest = document.getElementById('btn-slider-test');
     const sliderStatus = document.getElementById('slider-status');
-    const btnPicoTest = document.getElementById('btn-pico-test');
-    const picoStatus = document.getElementById('pico-status');
     const btnLazerTest = document.getElementById('btn-lazer-test');
     const lazerStatus = document.getElementById('lazer-status');
     const btnLightburnPing = document.getElementById('btn-lightburn-ping');
@@ -52,7 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnFwd) btnFwd.disabled = b;
         if (btnBwd) btnBwd.disabled = b;
         if (btnSliderTest) btnSliderTest.disabled = b;
-        if (btnPicoTest) btnPicoTest.disabled = b;
         if (btnLazerTest) btnLazerTest.disabled = b;
         if (btnLightburnPing) btnLightburnPing.disabled = b;
         if (btnLightburnStatus) btnLightburnStatus.disabled = b;
@@ -159,44 +156,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (sliderStatus) {
                     sliderStatus.textContent = 'Test Error';
                     sliderStatus.className = 'status-text failed';
-                }
-                if (msg) msg.textContent = 'Error: ' + e.message;
-            } finally {
-                setBusy(false);
-            }
-        });
-    }
-
-    if (btnPicoTest) {
-        btnPicoTest.addEventListener('click', async () => {
-            if (picoStatus) {
-                picoStatus.textContent = 'Testing Pico trigger...';
-                picoStatus.className = 'status-text testing';
-            }
-            if (msg) msg.textContent = 'Sending trigger to Pico...';
-            setBusy(true);
-            try {
-                const data = await postJSON('/api/pico/test');
-                if (picoStatus) {
-                    if (data.success) {
-                        picoStatus.textContent = 'Trigger Sent';
-                        picoStatus.className = 'status-text complete';
-                    } else {
-                        picoStatus.textContent = 'Test Failed';
-                        picoStatus.className = 'status-text failed';
-                    }
-                }
-                if (msg) {
-                    if (data.success) {
-                        msg.textContent = 'Pico trigger sent successfully - check if Enter key was pressed';
-                    } else {
-                        msg.textContent = data.message || 'Pico test failed';
-                    }
-                }
-            } catch (e) {
-                if (picoStatus) {
-                    picoStatus.textContent = 'Test Error';
-                    picoStatus.className = 'status-text failed';
                 }
                 if (msg) msg.textContent = 'Error: ' + e.message;
             } finally {
@@ -382,11 +341,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            if (picoStatus) {
-                picoStatus.textContent = 'Ready';
-                picoStatus.className = 'status-text';
-            }
-
             if (lazerStatus) {
                 lazerStatus.textContent = 'Ready';
                 lazerStatus.className = 'status-text';
@@ -468,7 +422,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize status elements
     if (sliderStatus) sliderStatus.className = 'status-text';
-    if (picoStatus) picoStatus.className = 'status-text';
     if (lazerStatus) lazerStatus.className = 'status-text';
 
     // Load configuration and start fallback polling if WebSocket is not available
