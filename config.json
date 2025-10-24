@@ -13,5 +13,13 @@
     "udp_enabled": true,
     "udp_ip": "192.168.1.170",
     "udp_port": 5005,
-    "udp_message": "START"
+    "udp_message": "START",
+    "lightburn_enabled": true,
+    "lightburn_ip": "192.168.1.170",
+    "lightburn_out_port": 19840,
+    "lightburn_in_port": 19841,
+    "lightburn_timeout": 2.0,
+    "lightburn_poll_interval": 0.5,
+    "lightburn_max_wait": 300,
+    "use_lightburn_status": true
 }

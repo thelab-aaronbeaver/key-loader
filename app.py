@@ -3,6 +3,7 @@
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 from hardware_controller import HardwareController
+from lightburn_controller import LightBurnController
 import time
 import json
 import os
@@ -126,6 +127,20 @@ def save_config(config_dict):
 # Load initial config
 config = load_config()
 
+# Initialize LightBurn controller
+lb_controller = None
+if config.get("lightburn_enabled", True):
+    try:
+        lb_controller = LightBurnController(
+            target_ip=config.get("lightburn_ip", "192.168.1.170"),
+            out_port=config.get("lightburn_out_port", 19840),
+            in_port=config.get("lightburn_in_port", 19841),
+            timeout=config.get("lightburn_timeout", 2.0)
+        )
+        print(f"✅ LightBurn controller initialized ({config.get('lightburn_ip')}:{config.get('lightburn_out_port')})")
+    except Exception as e:
+        print(f"⚠️  LightBurn controller initialization failed: {e}")
+
 # --- ADDED: WebSocket Event Handlers ---
 @socketio.on('connect')
 def handle_connect():
@@ -147,7 +162,7 @@ def handle_status_request():
 # REMOVED: speed_to_delay() function - now handled by SERVO42C-specific function in hardware_controller.py
 
 def send_udp_trigger():
-    """Send UDP trigger message to LightBurn."""
+    """Send UDP trigger message to LightBurn (legacy port 5005)."""
     if not config.get("udp_enabled", False):
         print("⏭️  UDP trigger disabled in config")
         return False
@@ -175,6 +190,72 @@ def send_udp_trigger():
         print(f"❌ UDP trigger error: {e}")
         return False
 
+def start_lightburn_job():
+    """Start LightBurn job via UDP automation protocol."""
+    global lb_controller
+    
+    if not config.get("lightburn_enabled", True):
+        print("⏭️  LightBurn integration disabled in config")
+        return False
+    
+    if lb_controller is None:
+        print("❌ LightBurn controller not initialized")
+        return False
+    
+    try:
+        # Start the job
+        success = lb_controller.start_job()
+        if success:
+            print("✅ LightBurn job started successfully")
+        else:
+            print("❌ Failed to start LightBurn job")
+        return success
+    except Exception as e:
+        print(f"❌ Error starting LightBurn job: {e}")
+        return False
+
+def wait_for_lightburn_completion():
+    """Wait for LightBurn to complete the current job."""
+    global lb_controller
+    
+    if not config.get("use_lightburn_status", True):
+        # Fall back to pause timer if status monitoring disabled
+        pause_time = max(config.get('pause_seconds', 1.0), 0)
+        print(f"⏳ Using pause timer: {pause_time:.1f}s (LightBurn status monitoring disabled)")
+        time.sleep(pause_time)
+        return True
+    
+    if lb_controller is None:
+        print("⚠️  LightBurn controller not available, using pause timer")
+        pause_time = max(config.get('pause_seconds', 1.0), 0)
+        time.sleep(pause_time)
+        return True
+    
+    try:
+        # Wait for job completion with status polling
+        poll_interval = config.get("lightburn_poll_interval", 0.5)
+        max_wait = config.get("lightburn_max_wait", 300)
+        
+        success = lb_controller.wait_for_completion(
+            poll_interval=poll_interval,
+            max_wait=max_wait
+        )
+        
+        if success:
+            print("✅ LightBurn job completed successfully")
+        else:
+            print("⚠️  LightBurn job completion timeout or error")
+        
+        return success
+        
+    except Exception as e:
+        print(f"❌ Error waiting for LightBurn completion: {e}")
+        # Fall back to pause timer on error
+        pause_time = max(config.get('pause_seconds', 1.0), 0)
+        print(f"⏳ Falling back to pause timer: {pause_time:.1f}s")
+        time.sleep(pause_time)
+        return False
+
 def send_pico_command(command):
     """Send command to Raspberry Pico via GPIO trigger pulse to emulate keyboard press."""
     print(f"📡 Sending to Pico: {command} (emulating keyboard Enter press)")
@@ -182,7 +263,11 @@ def send_pico_command(command):
     # Trigger Pico via GPIO pin (100ms pulse) to emulate keyboard Enter
     hw.trigger_pico(duration_ms=100)
     
-    # Also send UDP trigger to LightBurn
+    # Send LightBurn start command via UDP automation protocol
+    if config.get("lightburn_enabled", True):
+        start_lightburn_job()
+    
+    # Also send legacy UDP trigger for backward compatibility
     send_udp_trigger()
 
 @app.route('/')
@@ -201,6 +286,7 @@ def api_get_config():
 
 @app.route('/api/config', methods=['POST'])
 def api_set_config():
+    global lb_controller
     data = request.get_json(silent=True) or {}
     try:
         if 'step_degrees' in data:
@@ -233,6 +319,40 @@ def api_set_config():
             config['udp_port'] = int(data['udp_port'])
         if 'udp_message' in data:
             config['udp_message'] = str(data['udp_message'])
+        
+        # LightBurn configuration
+        if 'lightburn_enabled' in data:
+            config['lightburn_enabled'] = bool(data['lightburn_enabled'])
+        if 'lightburn_ip' in data:
+            config['lightburn_ip'] = str(data['lightburn_ip'])
+        if 'lightburn_out_port' in data:
+            config['lightburn_out_port'] = int(data['lightburn_out_port'])
+        if 'lightburn_in_port' in data:
+            config['lightburn_in_port'] = int(data['lightburn_in_port'])
+        if 'lightburn_timeout' in data:
+            config['lightburn_timeout'] = float(data['lightburn_timeout'])
+        if 'lightburn_poll_interval' in data:
+            config['lightburn_poll_interval'] = float(data['lightburn_poll_interval'])
+        if 'lightburn_max_wait' in data:
+            config['lightburn_max_wait'] = int(data['lightburn_max_wait'])
+        if 'use_lightburn_status' in data:
+            config['use_lightburn_status'] = bool(data['use_lightburn_status'])
+        
+        # Reinitialize LightBurn controller if settings changed
+        if any(key in data for key in ['lightburn_enabled', 'lightburn_ip', 'lightburn_out_port', 'lightburn_in_port', 'lightburn_timeout']):
+            if config.get("lightburn_enabled", True):
+                try:
+                    lb_controller = LightBurnController(
+                        target_ip=config.get("lightburn_ip", "192.168.1.170"),
+                        out_port=config.get("lightburn_out_port", 19840),
+                        in_port=config.get("lightburn_in_port", 19841),
+                        timeout=config.get("lightburn_timeout", 2.0)
+                    )
+                    print(f"✅ LightBurn controller reinitialized")
+                except Exception as e:
+                    print(f"⚠️  LightBurn controller reinit failed: {e}")
+            else:
+                lb_controller = None
         
         # Save to file
         if not save_config(config):
@@ -313,14 +433,18 @@ def run_cycle_background(total_cycles):
                 emit_status_update()
                 
                 # Step 2: Key Processing Sequence (Reordered)
-                # 1. Trigger Pico
-                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Triggering Pico keyboard emulator...")
+                # 1. Trigger Pico and start LightBurn job
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Triggering Pico and starting LightBurn job...")
                 send_pico_command("keyboard_enter")
                 
-                # 2. Wait for pause timer
-                pause_time = max(config['pause_seconds'], 0)
-                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Waiting {pause_time:.1f}s pause timer...")
-                time.sleep(pause_time)
+                # 2. Wait for LightBurn job completion (or use pause timer if disabled)
+                if config.get("use_lightburn_status", True):
+                    safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Waiting for LightBurn job completion...")
+                    wait_for_lightburn_completion()
+                else:
+                    pause_time = max(config.get('pause_seconds', 1.0), 0)
+                    safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Waiting {pause_time:.1f}s pause timer...")
+                    time.sleep(pause_time)
                 
                 # 3. Move rotary motor to next position
                 safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving rotary to next position...")
@@ -855,6 +979,62 @@ def api_pico_test():
         return jsonify({"success": False, "message": final_state["system_message"]})
     finally:
         safe_set_app_state("is_running", False)
+
+# --- ADDED: LightBurn test endpoints ---
+@app.route('/api/lightburn/ping', methods=['POST'])
+def api_lightburn_ping():
+    """Test LightBurn connection"""
+    global lb_controller
+    
+    if lb_controller is None:
+        return jsonify({"success": False, "message": "LightBurn controller not initialized"}), 400
+    
+    try:
+        success = lb_controller.ping()
+        if success:
+            return jsonify({"success": True, "message": "LightBurn is responding"})
+        else:
+            return jsonify({"success": False, "message": "LightBurn not responding"})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error: {str(e)}"}), 500
+
+@app.route('/api/lightburn/status', methods=['GET'])
+def api_lightburn_status():
+    """Get LightBurn status"""
+    global lb_controller
+    
+    if lb_controller is None:
+        return jsonify({"success": False, "message": "LightBurn controller not initialized"}), 400
+    
+    try:
+        status = lb_controller.get_status()
+        is_busy = lb_controller.is_busy()
+        
+        return jsonify({
+            "success": status is not None,
+            "status": status,
+            "is_busy": is_busy,
+            "message": "Status retrieved successfully" if status else "Failed to get status"
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error: {str(e)}"}), 500
+
+@app.route('/api/lightburn/start', methods=['POST'])
+def api_lightburn_start():
+    """Start LightBurn job"""
+    global lb_controller
+    
+    if lb_controller is None:
+        return jsonify({"success": False, "message": "LightBurn controller not initialized"}), 400
+    
+    try:
+        success = start_lightburn_job()
+        if success:
+            return jsonify({"success": True, "message": "LightBurn job started"})
+        else:
+            return jsonify({"success": False, "message": "Failed to start LightBurn job"})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error: {str(e)}"}), 500
 
 
 def status_broadcast_thread():

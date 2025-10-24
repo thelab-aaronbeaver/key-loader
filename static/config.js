@@ -19,6 +19,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const picoStatus = document.getElementById('pico-status');
     const btnLazerTest = document.getElementById('btn-lazer-test');
     const lazerStatus = document.getElementById('lazer-status');
+    const btnLightburnPing = document.getElementById('btn-lightburn-ping');
+    const btnLightburnStatus = document.getElementById('btn-lightburn-status');
+    const btnLightburnStart = document.getElementById('btn-lightburn-start');
+    const lightburnStatus = document.getElementById('lightburn-status');
+    const lightburnStatusInfo = document.getElementById('lightburn-status-info');
     const msg = document.getElementById('msg');
     // Config inputs
     const inpStepDeg = document.getElementById('step_degrees');
@@ -33,6 +38,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const inpSliderDecel = document.getElementById('slider_decel_steps');
     const inpHomeOffset = document.getElementById('home_offset');
     const inpLaserIp = document.getElementById('laser_ip');
+    const inpLightburnIp = document.getElementById('lightburn_ip');
+    const inpLightburnMaxWait = document.getElementById('lightburn_max_wait');
+    const inpUseLightburnStatus = document.getElementById('use_lightburn_status');
     const btnSaveCfg = document.getElementById('btn-save-config');
     const hall = document.getElementById('hall');
     const inductive = document.getElementById('inductive');
@@ -46,6 +54,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnSliderTest) btnSliderTest.disabled = b;
         if (btnPicoTest) btnPicoTest.disabled = b;
         if (btnLazerTest) btnLazerTest.disabled = b;
+        if (btnLightburnPing) btnLightburnPing.disabled = b;
+        if (btnLightburnStatus) btnLightburnStatus.disabled = b;
+        if (btnLightburnStart) btnLightburnStart.disabled = b;
         if (btnSetZero) btnSetZero.disabled = b;
         if (btnSaveCfg) btnSaveCfg.disabled = b;
     }
@@ -232,6 +243,85 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // LightBurn test buttons
+    if (btnLightburnPing) {
+        btnLightburnPing.addEventListener('click', async () => {
+            if (lightburnStatus) {
+                lightburnStatus.textContent = 'Testing...';
+                lightburnStatus.className = 'status-text testing';
+            }
+            if (msg) msg.textContent = 'Testing LightBurn connection...';
+            setBusy(true);
+            try {
+                const data = await postJSON('/api/lightburn/ping');
+                if (lightburnStatus) {
+                    if (data.success) {
+                        lightburnStatus.textContent = 'Connected';
+                        lightburnStatus.className = 'status-text complete';
+                    } else {
+                        lightburnStatus.textContent = 'Not Connected';
+                        lightburnStatus.className = 'status-text failed';
+                    }
+                }
+                if (msg) msg.textContent = data.message;
+            } catch (e) {
+                if (lightburnStatus) {
+                    lightburnStatus.textContent = 'Error';
+                    lightburnStatus.className = 'status-text failed';
+                }
+                if (msg) msg.textContent = 'Error: ' + e.message;
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    if (btnLightburnStatus) {
+        btnLightburnStatus.addEventListener('click', async () => {
+            if (msg) msg.textContent = 'Getting LightBurn status...';
+            setBusy(true);
+            try {
+                const res = await fetch('/api/lightburn/status');
+                const data = await res.json();
+                if (data.success) {
+                    const statusStr = JSON.stringify(data.status, null, 2);
+                    const isBusy = data.is_busy ? 'BUSY' : 'IDLE';
+                    if (lightburnStatusInfo) {
+                        lightburnStatusInfo.textContent = `Status: ${isBusy} - ${statusStr}`;
+                    }
+                    if (msg) msg.textContent = `LightBurn is ${isBusy}`;
+                } else {
+                    if (lightburnStatusInfo) {
+                        lightburnStatusInfo.textContent = 'Failed to get status';
+                    }
+                    if (msg) msg.textContent = data.message;
+                }
+            } catch (e) {
+                if (lightburnStatusInfo) {
+                    lightburnStatusInfo.textContent = 'Error getting status';
+                }
+                if (msg) msg.textContent = 'Error: ' + e.message;
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    if (btnLightburnStart) {
+        btnLightburnStart.addEventListener('click', async () => {
+            if (msg) msg.textContent = 'Starting LightBurn job...';
+            setBusy(true);
+            try {
+                const data = await postJSON('/api/lightburn/start');
+                if (msg) msg.textContent = data.message;
+            } catch (e) {
+                if (msg) msg.textContent = 'Error: ' + e.message;
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
     // WebSocket event handlers (only if socket is available)
     if (socket) {
         socket.on('connect', function () {
@@ -302,6 +392,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 lazerStatus.className = 'status-text';
             }
 
+            if (lightburnStatus) {
+                lightburnStatus.textContent = 'Ready';
+                lightburnStatus.className = 'status-text';
+            }
+
             // Update system message
             if (msg && data.system_message) {
                 msg.textContent = data.system_message;
@@ -329,6 +424,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inpSliderDecel) inpSliderDecel.value = cfg.slider_decel_steps || 15;
             if (inpHomeOffset) inpHomeOffset.value = cfg.home_offset || 0.0;
             if (inpLaserIp) inpLaserIp.value = cfg.udp_ip || '192.168.1.170';
+            if (inpLightburnIp) inpLightburnIp.value = cfg.lightburn_ip || '192.168.1.170';
+            if (inpLightburnMaxWait) inpLightburnMaxWait.value = cfg.lightburn_max_wait || 300;
+            if (inpUseLightburnStatus) inpUseLightburnStatus.checked = cfg.use_lightburn_status !== false;
         } catch (e) {
             if (msg) msg.textContent = 'Load config error: ' + e.message;
         }
@@ -353,7 +451,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         slider_accel_steps: parseInt(inpSliderAccel?.value || 15, 10),
                         slider_decel_steps: parseInt(inpSliderDecel?.value || 15, 10),
                         home_offset: parseFloat(inpHomeOffset?.value || 0.0),
-                        udp_ip: inpLaserIp?.value || '192.168.1.170'
+                        udp_ip: inpLaserIp?.value || '192.168.1.170',
+                        lightburn_ip: inpLightburnIp?.value || '192.168.1.170',
+                        lightburn_max_wait: parseInt(inpLightburnMaxWait?.value || 300, 10),
+                        use_lightburn_status: inpUseLightburnStatus?.checked !== false
                     })
                 });
                 const data = await res.json();
