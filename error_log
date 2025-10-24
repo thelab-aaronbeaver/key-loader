@@ -1,10 +1,2 @@
-script.js:49 Starting cycle with cycles: 6
-script.js:56 Start cycle response status: 200
-script.js:49 Starting cycle with cycles: 6
-script.js:56 Start cycle response status: 200
-script.js:123 updateUI called with data: {current_angle: 180, is_running: false, is_homed: true, system_message: 'Cycle complete. Processed 6 keys out of 6 positions. Ready.', hall_status: false, …}
-script.js:140 Hall sensor: INACTIVE
-script.js:144 Inductive sensor: ACTIVE
-script.js:148 Slider MIN: INACTIVE
-script.js:152 Slider MAX: ACTIVE
-script.js:157 Updating cycles progress: 0 of 0
+Status: IDLE - { "raw_response": "!", "status": "!" }
+Status: IDLE - { "raw_response": "OK", "status": "ok" }
