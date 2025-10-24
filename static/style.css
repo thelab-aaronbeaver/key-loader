@@ -124,6 +124,7 @@ h2 {
     min-height: 100px;
     font-family: monospace;
     overflow-y: auto;
+    width: 100%;
 }
 
 .button-group {
