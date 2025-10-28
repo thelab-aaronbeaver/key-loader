@@ -446,26 +446,64 @@ def run_cycle_background(total_cycles):
                 print(f"🔑 KEY {keys_processed}/{total_cycles} - Position {current_position} ({target_angle}°)")
                 print(f"{'─'*80}")
                 
-                # Step 2: Key Processing Sequence (Reordered)
+                # Step 2: Key Processing Sequence (Optimized - Parallel Execution)
                 # 1. Start LightBurn job
                 safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Starting LightBurn job...")
                 lightburn_start_time = time.time()
                 trigger_lightburn_job()
                 
-                # 2. Wait for LightBurn job completion (or use pause timer if disabled)
+                # 2. PARALLEL OPERATION: Move slider while LightBurn is running
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. LightBurn running - performing slider movements...")
+                
+                # Move slider MAX → MIN (during LightBurn job)
+                ultra_fast = config['slider_in_speed'] > 75
+                in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                
+                if not in_ok:
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Slider motor stalled moving to MIN! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
+                    hw.enable_slider_motor(False)
+                    return
+                
+                # Move slider MIN → MAX (during LightBurn job)
+                ultra_fast = config['slider_out_speed'] > 75
+                out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                
+                if not out_ok:
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Slider motor stalled moving to MAX! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
+                    hw.enable_slider_motor(False)
+                    return
+                
+                slider_duration = time.time() - lightburn_start_time
+                print(f"⏱️  Slider movements completed: {slider_duration:.2f}s (parallel with LightBurn)")
+                
+                # 3. Wait for LightBurn job completion (if not already done)
                 if config.get("use_lightburn_status", True):
                     safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Waiting for LightBurn job completion...")
                     wait_for_lightburn_completion()
                     lightburn_duration = time.time() - lightburn_start_time
                     print(f"⏱️  LightBurn job duration: {lightburn_duration:.2f}s")
+                    
+                    # Calculate time saved
+                    time_saved = max(0, slider_duration - (lightburn_duration - slider_duration))
+                    if time_saved > 0.1:
+                        print(f"⚡ Time saved by parallel execution: {time_saved:.2f}s")
                 else:
+                    # Fallback: Use pause timer minus slider time already elapsed
                     pause_time = max(config.get('pause_seconds', 1.0), 0)
-                    safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Waiting {pause_time:.1f}s pause timer...")
-                    time.sleep(pause_time)
-                    lightburn_duration = pause_time
-                    print(f"⏱️  Pause timer: {lightburn_duration:.2f}s")
+                    remaining_pause = max(0, pause_time - slider_duration)
+                    if remaining_pause > 0:
+                        safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Waiting remaining {remaining_pause:.1f}s...")
+                        time.sleep(remaining_pause)
+                    lightburn_duration = lightburn_start_time + pause_time - lightburn_start_time
+                    print(f"⏱️  Total pause time: {pause_time:.2f}s (slider: {slider_duration:.2f}s parallel)")
                 
-                # 3. Move rotary motor to next position
+                # 4. Move rotary motor to next position
                 safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving rotary to next position...")
                 move_success = hw.move_degrees(
                     config['step_degrees'], 
@@ -482,32 +520,6 @@ def run_cycle_background(total_cycles):
                     return
                 
                 safe_set_app_state("current_angle", target_angle)
-                
-                # 4. Move slider from MAX to MIN
-                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving slider to MIN position...")
-                ultra_fast = config['slider_in_speed'] > 75
-                in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-                
-                if not in_ok:
-                    safe_update_app_state({
-                        "system_message": "🚨 ERROR: Slider motor stalled moving to MIN! Check for jams and clear obstruction. Motor paused for safety.",
-                        "is_running": False
-                    })
-                    hw.enable_slider_motor(False)
-                    return
-                
-                # 5. Move slider from MIN back to MAX
-                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving slider back to MAX position...")
-                ultra_fast = config['slider_out_speed'] > 75
-                out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-                
-                if not out_ok:
-                    safe_update_app_state({
-                        "system_message": "🚨 ERROR: Slider motor stalled moving to MAX! Check for jams and clear obstruction. Motor paused for safety.",
-                        "is_running": False
-                    })
-                    hw.enable_slider_motor(False)
-                    return
                 
                 # 6. Key processing complete
                 key_duration = time.time() - key_start_time
