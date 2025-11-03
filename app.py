@@ -548,35 +548,7 @@ def run_cycle_background(total_cycles):
                     return
                 
                 safe_set_app_state("current_angle", target_angle)
-                
-                # Move slider from MAX to MIN and back to MAX (continuous search pattern)
-                safe_set_app_state("system_message", f"Searching pattern: Moving slider MIN→MAX at position {current_position}...")
-                
-                # Move to MIN
-                ultra_fast = config['slider_in_speed'] > 75
-                in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-                
-                if not in_ok:
-                    safe_update_app_state({
-                        "system_message": "🚨 ERROR: Slider motor stalled during search pattern (MIN)! Check for jams and clear obstruction. Motor paused for safety.",
-                        "is_running": False
-                    })
-                    hw.enable_slider_motor(False)
-                    return
-                
-                # Move back to MAX
-                ultra_fast = config['slider_out_speed'] > 75
-                out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
-                
-                if not out_ok:
-                    safe_update_app_state({
-                        "system_message": "🚨 ERROR: Slider motor stalled during search pattern (MAX)! Check for jams and clear obstruction. Motor paused for safety.",
-                        "is_running": False
-                    })
-                    hw.enable_slider_motor(False)
-                    return
-                
-                safe_set_app_state("system_message", f"Search pattern complete at position {current_position}. Holding at MAX until next cycle.")
+                safe_set_app_state("system_message", f"No key at position {current_position}. Slider holding at MAX, ready for next detection.")
 
         # Final cleanup and statistics
         cycle_duration = time.time() - cycle_start_time
