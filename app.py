@@ -528,9 +528,36 @@ def run_cycle_background(total_cycles):
                 print(f"{'─'*80}\n")
                 
             else:
-                # No key detected - move to next position
+                # No key detected - attempt to load a key with slider movement
+                safe_set_app_state("system_message", f"No key at position {current_position} ({target_angle}°). Attempting to load key...")
+                
+                # Move slider IN (MAX → MIN) to try to load a key
+                ultra_fast = config['slider_in_speed'] > 75
+                in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                
+                if not in_ok:
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Slider motor stalled moving to MIN! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
+                    hw.enable_slider_motor(False)
+                    return
+                
+                # Move slider OUT (MIN → MAX) 
+                ultra_fast = config['slider_out_speed'] > 75
+                out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                
+                if not out_ok:
+                    safe_update_app_state({
+                        "system_message": "🚨 ERROR: Slider motor stalled moving to MAX! Check for jams and clear obstruction. Motor paused for safety.",
+                        "is_running": False
+                    })
+                    hw.enable_slider_motor(False)
+                    return
+                
+                # Now increment position and move rotary to next position
                 current_position += 1  # Increment position counter
-                safe_set_app_state("system_message", f"No key at position {current_position} ({target_angle}°). Moving to next position...")
+                safe_set_app_state("system_message", f"Load attempt complete at position {current_position}. Moving rotary to next position...")
                 
                 # Move rotary motor by step degrees
                 move_success = hw.move_degrees(
@@ -548,7 +575,7 @@ def run_cycle_background(total_cycles):
                     return
                 
                 safe_set_app_state("current_angle", target_angle)
-                safe_set_app_state("system_message", f"No key at position {current_position}. Slider holding at MAX, ready for next detection.")
+                safe_set_app_state("system_message", f"Position {current_position} complete. Slider at MAX, ready for next detection.")
 
         # Final cleanup and statistics
         cycle_duration = time.time() - cycle_start_time
