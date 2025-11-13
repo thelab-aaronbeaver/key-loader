@@ -429,16 +429,18 @@ def run_cycle_background(total_cycles):
                 safe_set_app_state("system_message", "Cycle stopped by user request.")
                 break
             
-            # Step 1: Key Detection with Proximity Switch
+            # Step 1: Rotary is now at current_position (either from homing or from previous move)
+            # Wait a brief moment for rotary to settle and sensor to stabilize
             target_angle = (current_position * config['step_degrees']) % 360
-            safe_set_app_state("system_message", f"Searching for key at position {current_position} ({target_angle}°). Keys processed: {keys_processed} of {total_cycles}...")
+            safe_set_app_state("system_message", f"Rotary at position {current_position} ({target_angle}°). Checking for key...")
+            time.sleep(0.1)  # Brief settle time for sensor to stabilize
             emit_status_update()
             
+            # Step 2: Check sensor AFTER rotary has positioned
             if hw.read_inductive_sensor():
                 # Key detected - process it
                 key_start_time = time.time()
                 keys_processed += 1
-                current_position += 1  # Only increment position when key is processed
                 safe_set_app_state("current_cycle", keys_processed)  # Update UI with keys processed count
                 safe_set_app_state("system_message", f"✅ Key detected at position {current_position} ({target_angle}°). Processing key {keys_processed} of {total_cycles}...")
                 emit_status_update()
@@ -505,6 +507,11 @@ def run_cycle_background(total_cycles):
                 
                 # 4. Move rotary motor to next position
                 safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving rotary to next position...")
+                
+                # Increment position counter BEFORE moving
+                current_position += 1
+                next_angle = (current_position * config['step_degrees']) % 360
+                
                 move_success = hw.move_degrees(
                     config['step_degrees'], 
                     speed=config['rotary_speed'],
@@ -519,11 +526,11 @@ def run_cycle_background(total_cycles):
                     hw.enable_rotary_motor(False)
                     return
                 
-                safe_set_app_state("current_angle", target_angle)
+                safe_set_app_state("current_angle", next_angle)
                 
-                # 6. Key processing complete
+                # 5. Key processing complete
                 key_duration = time.time() - key_start_time
-                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} complete. Ready for next search.")
+                safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} complete. Rotary at position {current_position} ({next_angle}°).")
                 print(f"✅ Key {keys_processed} complete - Total time: {key_duration:.2f}s (LightBurn: {lightburn_duration:.2f}s)")
                 print(f"{'─'*80}\n")
                 
@@ -555,11 +562,14 @@ def run_cycle_background(total_cycles):
                     hw.enable_slider_motor(False)
                     return
                 
-                # Now increment position and move rotary to next position
-                current_position += 1  # Increment position counter
-                safe_set_app_state("system_message", f"Load attempt complete at position {current_position}. Moving rotary to next position...")
+                # No key was detected - move rotary to next position to continue searching
+                safe_set_app_state("system_message", f"No key loaded at position {current_position}. Moving rotary to next position...")
                 
-                # Move rotary motor by step degrees
+                # Increment position counter BEFORE moving
+                current_position += 1
+                next_angle = (current_position * config['step_degrees']) % 360
+                
+                # Move rotary motor by step degrees to next position
                 move_success = hw.move_degrees(
                     config['step_degrees'], 
                     speed=config['rotary_speed'],
@@ -574,8 +584,8 @@ def run_cycle_background(total_cycles):
                     hw.enable_rotary_motor(False)
                     return
                 
-                safe_set_app_state("current_angle", target_angle)
-                safe_set_app_state("system_message", f"Position {current_position} complete. Slider at MAX, ready for next detection.")
+                safe_set_app_state("current_angle", next_angle)
+                safe_set_app_state("system_message", f"Rotary moved to position {current_position} ({next_angle}°). Slider at MAX, ready for next detection.")
 
         # Final cleanup and statistics
         cycle_duration = time.time() - cycle_start_time
