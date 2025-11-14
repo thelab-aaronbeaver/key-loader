@@ -13,7 +13,7 @@ class HardwareController:
         self.ALM_PIN = 16
         
         # Sensors
-        self.HALL_PIN = 6
+        self.HALL_PIN = 5
         self.INDUCTIVE_PIN = 22
         
         # --- ADDED: Legacy rotary limit switch pins (optional) ---
