@@ -13,7 +13,7 @@ class HardwareController:
         self.ALM_PIN = 16
         
         # Sensors
-        self.HALL_PIN = 26
+        self.HALL_PIN = 6
         self.INDUCTIVE_PIN = 22
         
         # --- ADDED: Legacy rotary limit switch pins (optional) ---
@@ -138,54 +138,18 @@ class HardwareController:
         # Set direction for homing (e.g., counter-clockwise)
         GPIO.output(self.DIR_PIN, GPIO.LOW)
 
-        # STAGE 1: Fast search - Rotate until hall is triggered (active low)
-        # Use slower speed for homing to ensure reliable sensor detection
-        homing_delay = 0.001  # 1ms delay = much slower than normal speed (0.0002s)
-        max_steps = int(self.PULSES_PER_REV * 1.5)  # Limit to ~1.5 revs to avoid loops
-        
-        print("Stage 1: Fast search for Hall sensor...")
+        # Rotate until hall is triggered (active low). Limit to ~1.5 revs to avoid loops
+        max_steps = int(self.PULSES_PER_REV * 1.5)
         for _ in range(max_steps):
-            # Check sensor before each step
             if self.read_hall_sensor():
-                print("✅ Hall sensor detected! Starting slow approach...")
-                
-                # STAGE 2: Back off slightly and approach slowly for accuracy
-                # Back off 50 steps
-                GPIO.output(self.DIR_PIN, GPIO.HIGH)  # Reverse direction
-                for _ in range(50):
-                    GPIO.output(self.STEP_PIN, GPIO.HIGH)
-                    time.sleep(homing_delay)
-                    GPIO.output(self.STEP_PIN, GPIO.LOW)
-                    time.sleep(homing_delay)
-                
-                # Wait for sensor to deactivate
-                time.sleep(0.1)
-                
-                # Slow approach - very slow for precision
-                GPIO.output(self.DIR_PIN, GPIO.LOW)  # Back to homing direction
-                slow_delay = 0.005  # 5ms delay = very slow
-                
-                print("Stage 2: Slow precision approach...")
-                for _ in range(200):  # Max 200 steps for slow approach
-                    if self.read_hall_sensor():
-                        print("✅ Hall sensor detected on slow approach. Homing complete.")
-                        time.sleep(0.1)  # Settle time
-                        return True
-                    
-                    GPIO.output(self.STEP_PIN, GPIO.HIGH)
-                    time.sleep(slow_delay)
-                    GPIO.output(self.STEP_PIN, GPIO.LOW)
-                    time.sleep(slow_delay)
-                
-                # If we get here, slow approach failed but we know sensor is near
-                print("✅ Homing complete (approximate position).")
+                # Optional: back off a bit and re-approach slowly for better accuracy
+                print("✅ Hall detected. Homing complete.")
                 return True
 
-            # Continue fast search
             GPIO.output(self.STEP_PIN, GPIO.HIGH)
-            time.sleep(homing_delay)
+            time.sleep(self.SPEED_DELAY)
             GPIO.output(self.STEP_PIN, GPIO.LOW)
-            time.sleep(homing_delay)
+            time.sleep(self.SPEED_DELAY)
 
         print("🛑 ERROR: Homing failed! Hall not detected within expected travel.")
         # Disable motor on failure
