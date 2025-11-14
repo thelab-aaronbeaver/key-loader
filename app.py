@@ -37,7 +37,11 @@ app_state = {
     # --- ADDED: Background thread reference ---
     "cycle_thread": None,
     # --- ADDED: Emergency stop state ---
-    "emergency_stop": False
+    "emergency_stop": False,
+    # --- ADDED: Key catcher state ---
+    "key_catcher_paused": False,
+    "key_catcher_position": 0,
+    "key_catcher_keys_since_reset": 0
 }
 
 # --- ADDED: Runtime configuration with JSON persistence ---
@@ -68,7 +72,13 @@ def load_config():
         "lightburn_timeout": 2.0,         # Response timeout in seconds
         "lightburn_poll_interval": 0.1,   # Status check interval (100ms)
         "lightburn_max_wait": 300,        # Max wait for job completion (5 min)
-        "use_lightburn_status": True      # Use status monitoring vs pause timer
+        "use_lightburn_status": True,     # Use status monitoring vs pause timer
+        "key_catcher_enabled": True,      # enable key catcher motor
+        "key_catcher_steps_per_key": 80,  # steps to move per key detected
+        "key_catcher_speed": 80,          # 0-100 speed scale for key catcher motor
+        "key_catcher_start_position": 0,  # starting position in steps
+        "key_catcher_pause_position": 4000,  # pause position in steps (50 keys * 80 steps)
+        "key_catcher_keys_before_pause": 50  # number of keys before pausing
     }
     
     if os.path.exists(CONFIG_FILE):
@@ -343,6 +353,20 @@ def api_set_config():
         if 'use_lightburn_status' in data:
             config['use_lightburn_status'] = bool(data['use_lightburn_status'])
         
+        # Key catcher configuration
+        if 'key_catcher_enabled' in data:
+            config['key_catcher_enabled'] = bool(data['key_catcher_enabled'])
+        if 'key_catcher_steps_per_key' in data:
+            config['key_catcher_steps_per_key'] = int(data['key_catcher_steps_per_key'])
+        if 'key_catcher_speed' in data:
+            config['key_catcher_speed'] = max(0, min(100, int(data['key_catcher_speed'])))
+        if 'key_catcher_start_position' in data:
+            config['key_catcher_start_position'] = int(data['key_catcher_start_position'])
+        if 'key_catcher_pause_position' in data:
+            config['key_catcher_pause_position'] = int(data['key_catcher_pause_position'])
+        if 'key_catcher_keys_before_pause' in data:
+            config['key_catcher_keys_before_pause'] = max(1, int(data['key_catcher_keys_before_pause']))
+        
         # Reinitialize LightBurn controller if settings changed
         if any(key in data for key in ['lightburn_enabled', 'lightburn_ip', 'lightburn_out_port', 'lightburn_in_port', 'lightburn_timeout']):
             if config.get("lightburn_enabled", True):
@@ -528,7 +552,65 @@ def run_cycle_background(total_cycles):
                 
                 safe_set_app_state("current_angle", next_angle)
                 
-                # 5. Key processing complete
+                # 5. Move key catcher motor (if enabled)
+                if config.get('key_catcher_enabled', True):
+                    safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving key catcher...")
+                    
+                    steps_per_key = config.get('key_catcher_steps_per_key', 80)
+                    key_catcher_speed = config.get('key_catcher_speed', 80)
+                    
+                    # Move key catcher by configured steps
+                    catcher_success = hw.key_catcher_move_steps(steps_per_key, key_catcher_speed)
+                    
+                    if catcher_success:
+                        # Update tracking
+                        hw.key_catcher_increment_key_count()
+                        keys_since_reset = hw.key_catcher_keys_processed
+                        safe_set_app_state("key_catcher_keys_since_reset", keys_since_reset)
+                        
+                        print(f"🔧 Key catcher moved {steps_per_key} steps. Keys since reset: {keys_since_reset}")
+                        
+                        # Check if we need to pause for key removal
+                        keys_before_pause = config.get('key_catcher_keys_before_pause', 50)
+                        if keys_since_reset >= keys_before_pause:
+                            print(f"\n{'='*80}")
+                            print(f"🛑 KEY CATCHER PAUSE: {keys_before_pause} keys processed")
+                            print(f"{'='*80}\n")
+                            
+                            safe_update_app_state({
+                                "key_catcher_paused": True,
+                                "system_message": f"⏸️  PAUSED: {keys_before_pause} keys collected. Please remove keys and click RESUME to continue.",
+                                "is_running": False
+                            })
+                            emit_status_update()
+                            
+                            # Wait for resume signal
+                            print("Waiting for user to resume cycle after key removal...")
+                            while True:
+                                current_state = safe_get_app_state()
+                                
+                                # Check if emergency stop or normal stop requested
+                                if current_state["emergency_stop"]:
+                                    safe_set_app_state("system_message", "🚨 EMERGENCY STOP during pause!")
+                                    return
+                                
+                                if current_state["stop_requested"]:
+                                    safe_set_app_state("system_message", "Cycle stopped during pause.")
+                                    return
+                                
+                                # Check if pause was released (is_running set back to True)
+                                if not current_state["key_catcher_paused"]:
+                                    break
+                                
+                                time.sleep(0.5)  # Check every 500ms
+                            
+                            # Pause released - resume cycle
+                            print("Cycle resuming after key removal pause")
+                            safe_set_app_state("is_running", True)
+                    else:
+                        print(f"⚠️  Warning: Key catcher movement failed")
+                
+                # 6. Key processing complete
                 key_duration = time.time() - key_start_time
                 safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles} complete. Rotary at position {current_position} ({next_angle}°).")
                 print(f"✅ Key {keys_processed} complete - Total time: {key_duration:.2f}s (LightBurn: {lightburn_duration:.2f}s)")
@@ -751,6 +833,56 @@ def emergency_stop_reset():
     })
     emit_status_update()
     return jsonify({"message": "Emergency stop reset"})
+
+@app.route('/api/key_catcher/resume', methods=['POST'])
+def key_catcher_resume():
+    """Resume cycle after key catcher pause - resets key catcher to start position."""
+    current_state = safe_get_app_state()
+    
+    if not current_state["key_catcher_paused"]:
+        return jsonify({"error": "Key catcher is not paused"}), 400
+    
+    try:
+        # Reset key catcher to start position
+        start_position = config.get('key_catcher_start_position', 0)
+        speed = config.get('key_catcher_speed', 80)
+        
+        print(f"\n{'='*80}")
+        print(f"🔄 RESUMING: Resetting key catcher to start position ({start_position})")
+        print(f"{'='*80}\n")
+        
+        # Move to start position
+        success = hw.key_catcher_move_to_position(start_position, speed)
+        
+        if success:
+            # Reset key counter
+            hw.key_catcher_reset_key_count()
+            
+            # Clear pause state
+            safe_update_app_state({
+                "key_catcher_paused": False,
+                "key_catcher_keys_since_reset": 0,
+                "is_running": True,
+                "system_message": "Resuming cycle... Key catcher reset to start position."
+            })
+            
+            emit_status_update()
+            
+            return jsonify({
+                "success": True,
+                "message": "Key catcher reset. Cycle resuming..."
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Failed to reset key catcher position"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Error: {str(e)}"
+        }), 500
 
 @app.route('/api/start', methods=['POST'])
 def start_cycle():
@@ -1008,6 +1140,163 @@ def api_udp_test():
         return jsonify({"success": False, "message": final_state["system_message"]})
     finally:
         safe_set_app_state("is_running", False)
+
+# --- ADDED: Key catcher test endpoints ---
+@app.route('/api/key_catcher/move_steps', methods=['POST'])
+def api_key_catcher_move_steps():
+    """Move key catcher a specific number of steps."""
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+    
+    data = request.get_json(silent=True) or {}
+    try:
+        steps = int(data.get("steps", 0))
+        speed = int(data.get("speed", config.get('key_catcher_speed', 80)))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "Invalid parameters"}), 400
+    
+    safe_update_app_state({
+        "is_running": True,
+        "system_message": f"Moving key catcher {steps} steps..."
+    })
+    
+    try:
+        ok = hw.key_catcher_move_steps(steps, speed)
+        position = hw.key_catcher_get_position()
+        
+        if ok:
+            safe_set_app_state("system_message", f"Key catcher moved to position {position}")
+        else:
+            safe_set_app_state("system_message", "Key catcher move failed")
+        
+        final_state = safe_get_app_state()
+        return jsonify({
+            "success": ok, 
+            "message": final_state["system_message"],
+            "position": position
+        })
+    except Exception as e:
+        safe_set_app_state("system_message", f"Key catcher error: {str(e)}")
+        return jsonify({"success": False, "message": str(e)})
+    finally:
+        safe_set_app_state("is_running", False)
+
+@app.route('/api/key_catcher/move_to_position', methods=['POST'])
+def api_key_catcher_move_to_position():
+    """Move key catcher to an absolute position."""
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+    
+    data = request.get_json(silent=True) or {}
+    try:
+        target_position = int(data.get("position", 0))
+        speed = int(data.get("speed", config.get('key_catcher_speed', 80)))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "Invalid parameters"}), 400
+    
+    safe_update_app_state({
+        "is_running": True,
+        "system_message": f"Moving key catcher to position {target_position}..."
+    })
+    
+    try:
+        ok = hw.key_catcher_move_to_position(target_position, speed)
+        position = hw.key_catcher_get_position()
+        
+        if ok:
+            safe_set_app_state("system_message", f"Key catcher at position {position}")
+        else:
+            safe_set_app_state("system_message", "Key catcher move failed")
+        
+        final_state = safe_get_app_state()
+        return jsonify({
+            "success": ok, 
+            "message": final_state["system_message"],
+            "position": position
+        })
+    except Exception as e:
+        safe_set_app_state("system_message", f"Key catcher error: {str(e)}")
+        return jsonify({"success": False, "message": str(e)})
+    finally:
+        safe_set_app_state("is_running", False)
+
+@app.route('/api/key_catcher/reset', methods=['POST'])
+def api_key_catcher_reset():
+    """Reset key catcher to home position (0 steps)."""
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+    
+    speed = config.get('key_catcher_speed', 80)
+    
+    safe_update_app_state({
+        "is_running": True,
+        "system_message": "Resetting key catcher to home position..."
+    })
+    
+    try:
+        ok = hw.key_catcher_reset_position(speed)
+        position = hw.key_catcher_get_position()
+        
+        if ok:
+            hw.key_catcher_reset_key_count()
+            safe_set_app_state("system_message", f"Key catcher reset to position {position}")
+        else:
+            safe_set_app_state("system_message", "Key catcher reset failed")
+        
+        final_state = safe_get_app_state()
+        return jsonify({
+            "success": ok, 
+            "message": final_state["system_message"],
+            "position": position
+        })
+    except Exception as e:
+        safe_set_app_state("system_message", f"Key catcher error: {str(e)}")
+        return jsonify({"success": False, "message": str(e)})
+    finally:
+        safe_set_app_state("is_running", False)
+
+@app.route('/api/key_catcher/set_position', methods=['POST'])
+def api_key_catcher_set_position():
+    """Set the current position as a specific value (for calibration)."""
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+    
+    data = request.get_json(silent=True) or {}
+    try:
+        position = int(data.get("position", 0))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "Invalid position"}), 400
+    
+    try:
+        hw.key_catcher_set_position(position)
+        safe_set_app_state("system_message", f"Key catcher position set to {position}")
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Position set to {position}",
+            "position": position
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+@app.route('/api/key_catcher/get_position', methods=['GET'])
+def api_key_catcher_get_position():
+    """Get the current position of the key catcher."""
+    try:
+        position = hw.key_catcher_get_position()
+        keys_processed = hw.key_catcher_keys_processed
+        
+        return jsonify({
+            "success": True, 
+            "position": position,
+            "keys_processed": keys_processed
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
 
 # --- LightBurn test endpoints ---
 @app.route('/api/lightburn/ping', methods=['POST'])

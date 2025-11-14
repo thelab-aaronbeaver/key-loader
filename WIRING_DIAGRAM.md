@@ -11,10 +11,13 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 ### **Hardware Components:**
 - **Raspberry Pi 4 B** - Main controller
 - **DROK 48V Power Supply** - Main power (adjustable 0-48V, 10A)
+- **External 12V Power Supply** - For key catcher motor
 - **Rotary Motor**: 23HS45-4204D-E1000 (3.0Nm Closed loop stepper)
 - **Rotary Driver**: CL57T (Nema 23/24 Closed loop driver V4.1)
 - **Slider Motor**: Nema 17 Pancake (1A, 17Ncm, 1.8°)
 - **Slider Driver**: MKS SERVO42C NEMA17 Closed Loop Stepper Motor Driver (Low Noise)
+- **Key Catcher Motor**: Nema 17 Stepper (recommend 1-2A)
+- **Key Catcher Driver**: MKS SERVO42C NEMA17 Closed Loop Stepper Motor Driver #2 (Low Noise)
 - **Inductive Sensor**: Taiss LJ12A3-4-Z/BX (NPN NO, DC6-36V, 4mm)
 - **Hall Sensor**: HiLetgo NJK-5002C (NPN, 3-wire, NO)
 - **Limit Switches**: 896F Mini Horizontal Mechanical (2x)
@@ -35,6 +38,10 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 | DIR | 24 | Direction (DIR+) | |
 | ENABLE | 25 | Enable/Disable (ENA) | |
 | ALARM | 18 | Stall detection (ALM) | |
+| **Key Catcher Motor (SERVO42C #2)** | | | |
+| STEP | 12 | Step signal (PUL+) | NEW |
+| DIR | 13 | Direction (DIR+) | NEW |
+| ENABLE | 14 | Enable/Disable (ENA) | NEW |
 | **Limit Switches (896F)** | | | |
 | Slider MIN | 27 | Inward limit | |
 | Slider MAX | 17 | Outward limit | ⚠️ **UPDATED** |
@@ -125,7 +132,7 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 
 ## ⚙️ **COMPONENT-SPECIFIC CONFIGURATIONS**
 
-### **DROK 48V Power Supply Setup:**
+### **Power Supply Setup:**
 ```
 DROK 48V Supply Outputs:
 ├── 48V ── CL57T Driver (Rotary Motor)
@@ -133,6 +140,10 @@ DROK 48V Supply Outputs:
 ├── 12V ── LM317 Regulator Input
 ├── 5V ── Raspberry Pi + Sensors
 └── GND ── Common Ground (ALL components)
+
+External 12V Supply:
+├── 12V ── SERVO42C Driver #2 (Key Catcher Motor)
+└── GND ── Common Ground (connect to main ground)
 ```
 
 ### **CL57T Driver (Rotary Motor) Configuration:**
@@ -150,6 +161,16 @@ DROK 48V Supply Outputs:
 - **Alarm Logic**: HIGH = OK, LOW = fault/stall
 - **Max Pulse Rate**: 25kHz+ (reduced due to 12V supply)
 - **DIP Switch Settings**: MS1=OFF, MS2=ON, MS3=OFF (4x microstepping)
+
+### **MKS SERVO42C Driver (Key Catcher Motor) Configuration:**
+- **Power**: 12V from External Power Supply
+- **Microstepping**: 4x (800 steps/revolution) - **BALANCED FOR 12V**
+- **Current**: Set for motor rating (typically 1.0-2.0A)
+- **Enable Logic**: LOW = enabled, HIGH = disabled
+- **Max Pulse Rate**: 25kHz+ (12V supply)
+- **DIP Switch Settings**: MS1=OFF, MS2=ON, MS3=OFF (4x microstepping)
+- **Function**: Rotates key catching mechanism after each key is processed
+- **Operation**: Moves set number of steps per key, pauses after configurable count
 
 ### **Sensor Power (LM317 Regulator):**
 ```

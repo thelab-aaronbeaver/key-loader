@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const startButton = document.getElementById('start-button');
     const homeButton = document.getElementById('home-button');
+    const resumeButton = document.getElementById('resume-button');
     const emergencyStopButton = document.getElementById('emergency-stop-button');
     const messageDisplay = document.getElementById('system-message');
     const homedDisplay = document.getElementById('homed-status'); // May not exist
@@ -69,6 +70,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 } catch (e) {
                     // no-op; errors reflected via /api/status polling
                 }
+            }
+        });
+    }
+
+    // Resume Button (for key catcher pause)
+    if (resumeButton) {
+        resumeButton.addEventListener('click', async () => {
+            if (messageDisplay) messageDisplay.textContent = 'Resuming cycle...';
+            try {
+                const response = await fetch('/api/key_catcher/resume', { method: 'POST' });
+                const data = await response.json();
+                if (!response.ok) {
+                    if (messageDisplay) messageDisplay.textContent = 'Resume failed: ' + (data.message || data.error);
+                } else {
+                    if (messageDisplay) messageDisplay.textContent = data.message || 'Cycle resuming...';
+                }
+            } catch (e) {
+                if (messageDisplay) messageDisplay.textContent = 'Resume error: ' + e.message;
             }
         });
     }
@@ -190,6 +209,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 startButton.textContent = 'Start Cycle';
                 startButton.disabled = !data.is_homed; // Disable if not homed
                 startButton.className = 'btn-move'; // Reset to normal styling
+            }
+        }
+
+        // Show/hide resume button based on key catcher pause state
+        if (resumeButton) {
+            if (data.key_catcher_paused) {
+                resumeButton.style.display = 'inline-block';
+                resumeButton.className = 'btn-move';
+            } else {
+                resumeButton.style.display = 'none';
             }
         }
 

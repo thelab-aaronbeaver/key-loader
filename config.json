@@ -21,5 +21,11 @@
     "lightburn_timeout": 2.0,
     "lightburn_poll_interval": 0.1,
     "lightburn_max_wait": 300,
-    "use_lightburn_status": true
+    "use_lightburn_status": true,
+    "key_catcher_enabled": true,
+    "key_catcher_steps_per_key": 80,
+    "key_catcher_speed": 80,
+    "key_catcher_start_position": 0,
+    "key_catcher_pause_position": 4000,
+    "key_catcher_keys_before_pause": 50
 }

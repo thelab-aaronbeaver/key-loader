@@ -37,6 +37,20 @@ class HardwareController:
         self.SLIDER_MIN_PIN = 27
         self.SLIDER_MAX_PIN = 17
 
+        # --- ADDED: Key catcher motor control pins (MKS SERVO42C #2) ---
+        self.KEY_CATCHER_STEP_PIN = 12
+        self.KEY_CATCHER_DIR_PIN = 13
+        self.KEY_CATCHER_ENABLE_PIN = 14
+
+        # --- Key Catcher Configuration (12V Supply) ---
+        # SERVO42C with 12V supply - same as slider motor
+        self.KEY_CATCHER_PULSES_PER_REV = 800  # 4x microstepping (optimized for 12V)
+        self.KEY_CATCHER_MAX_PULSE_RATE = 25000  # SERVO42C with 12V can handle 25kHz+
+        
+        # Key catcher position tracking
+        self.key_catcher_current_position = 0  # Current position in steps
+        self.key_catcher_keys_processed = 0     # Keys processed since last reset
+
         # --- MODIFIED: Motor Configuration for CL57T Driver (Rotary) ---
         # CL57T is configured for 3200 pulses per revolution (16x microstepping on 1.8° motor).
         # 200 full steps * 16 microsteps = 3200 pulses per revolution.
@@ -72,11 +86,17 @@ class HardwareController:
         GPIO.setup(self.SLIDER_ENABLE_PIN, GPIO.OUT)
         GPIO.setup(self.SLIDER_ALM_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         
+        # --- ADDED: Setup key catcher motor control pins ---
+        GPIO.setup(self.KEY_CATCHER_STEP_PIN, GPIO.OUT)
+        GPIO.setup(self.KEY_CATCHER_DIR_PIN, GPIO.OUT)
+        GPIO.setup(self.KEY_CATCHER_ENABLE_PIN, GPIO.OUT)
+        
         # Initialize enable pins (motors disabled by default)
         GPIO.output(self.ENABLE_PIN, GPIO.HIGH)  # HIGH = disabled for most drivers
         GPIO.output(self.SLIDER_ENABLE_PIN, GPIO.HIGH)  # HIGH = disabled for most drivers
+        GPIO.output(self.KEY_CATCHER_ENABLE_PIN, GPIO.HIGH)  # HIGH = disabled for most drivers
         
-        print("✅ Hardware Controller Initialized with Enable Pins, Limit Switches, and Slider Alarm")
+        print("✅ Hardware Controller Initialized with Enable Pins, Limit Switches, Slider Alarm, and Key Catcher Motor")
 
     # --- ADDED: Enable pin control methods ---
     def enable_rotary_motor(self, enabled=True):
@@ -98,6 +118,13 @@ class HardwareController:
         """Return True if the slider driver reports a fault/stall (ALM active)."""
         # Most drivers expose ALM as active-low (LOW = fault). Adjust if needed.
         return GPIO.input(self.SLIDER_ALM_PIN) == GPIO.LOW
+
+    def enable_key_catcher_motor(self, enabled=True):
+        """Enable or disable the key catcher motor."""
+        # Most stepper drivers: LOW = enabled, HIGH = disabled
+        GPIO.output(self.KEY_CATCHER_ENABLE_PIN, GPIO.LOW if enabled else GPIO.HIGH)
+        status = "enabled" if enabled else "disabled"
+        print(f"Key catcher motor {status}")
 
     # --- MODIFIED: Homing Method (use hall sensor for home detection) ---
     def home_table(self):
@@ -418,11 +445,134 @@ class HardwareController:
         print(f"MIN movement completed: {step_count} steps, MIN switch not triggered")
         return False
 
+    # --- ADDED: Key catcher motor control methods ---
+    def key_catcher_move_steps(self, steps, speed=80, direction=1):
+        """
+        Move the key catcher motor a specific number of steps.
+        
+        Args:
+            steps: Number of steps to move
+            speed: Speed (0-100)
+            direction: 1 for forward, -1 for reverse (or use negative steps)
+        
+        Returns:
+            bool: True if movement successful
+        """
+        if steps == 0:
+            return True
+        
+        # Handle negative steps
+        if steps < 0:
+            steps = abs(steps)
+            direction = -direction
+        
+        # Enable motor
+        self.enable_key_catcher_motor(True)
+        time.sleep(0.05)  # Brief enable delay
+        
+        # Set direction
+        GPIO.output(self.KEY_CATCHER_DIR_PIN, GPIO.HIGH if direction > 0 else GPIO.LOW)
+        
+        # Convert speed to delay using SERVO42C speed calculation
+        speed_delay = self._servo42c_speed_to_delay(speed)
+        
+        print(f"Key catcher moving {steps} steps ({'forward' if direction > 0 else 'reverse'}) at speed {speed}")
+        
+        # Perform movement with simple acceleration/deceleration
+        accel_steps = min(20, steps // 4)  # Short acceleration for key catcher
+        decel_steps = min(20, steps // 4)
+        cruise_steps = max(0, steps - accel_steps - decel_steps)
+        
+        step_count = 0
+        
+        # Acceleration phase
+        for i in range(accel_steps):
+            delay = speed_delay * (1.0 + (accel_steps - i) / accel_steps)
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.HIGH)
+            time.sleep(delay)
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.LOW)
+            time.sleep(delay)
+            step_count += 1
+        
+        # Cruise phase
+        for _ in range(cruise_steps):
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.HIGH)
+            time.sleep(speed_delay)
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.LOW)
+            time.sleep(speed_delay)
+            step_count += 1
+        
+        # Deceleration phase
+        for i in range(decel_steps):
+            delay = speed_delay * (1.0 + (i + 1) / decel_steps)
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.HIGH)
+            time.sleep(delay)
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.LOW)
+            time.sleep(delay)
+            step_count += 1
+        
+        # Update position tracking
+        self.key_catcher_current_position += (steps * direction)
+        
+        print(f"Key catcher moved {step_count} steps. Current position: {self.key_catcher_current_position}")
+        return True
+    
+    def key_catcher_move_to_position(self, target_position, speed=80):
+        """
+        Move key catcher to an absolute position.
+        
+        Args:
+            target_position: Target position in steps
+            speed: Speed (0-100)
+        
+        Returns:
+            bool: True if movement successful
+        """
+        steps_to_move = target_position - self.key_catcher_current_position
+        if steps_to_move == 0:
+            print(f"Key catcher already at position {target_position}")
+            return True
+        
+        return self.key_catcher_move_steps(steps_to_move, speed)
+    
+    def key_catcher_reset_position(self, speed=80):
+        """
+        Reset key catcher to home position (0 steps).
+        
+        Args:
+            speed: Speed (0-100)
+        
+        Returns:
+            bool: True if movement successful
+        """
+        print(f"Resetting key catcher from position {self.key_catcher_current_position} to 0")
+        return self.key_catcher_move_to_position(0, speed)
+    
+    def key_catcher_set_position(self, position):
+        """Set the current position without moving (for calibration)."""
+        self.key_catcher_current_position = position
+        print(f"Key catcher position set to {position}")
+    
+    def key_catcher_get_position(self):
+        """Get the current position of the key catcher."""
+        return self.key_catcher_current_position
+    
+    def key_catcher_increment_key_count(self):
+        """Increment the key counter."""
+        self.key_catcher_keys_processed += 1
+        return self.key_catcher_keys_processed
+    
+    def key_catcher_reset_key_count(self):
+        """Reset the key counter."""
+        self.key_catcher_keys_processed = 0
+        print("Key catcher key count reset to 0")
+
     def cleanup(self):
         """Clean up GPIO and disable all motors."""
         print("Disabling all motors...")
         self.enable_rotary_motor(False)
         self.enable_slider_motor(False)
+        self.enable_key_catcher_motor(False)
         GPIO.cleanup()
 
         print("GPIO cleanup complete.")
