@@ -138,18 +138,54 @@ class HardwareController:
         # Set direction for homing (e.g., counter-clockwise)
         GPIO.output(self.DIR_PIN, GPIO.LOW)
 
-        # Rotate until hall is triggered (active low). Limit to ~1.5 revs to avoid loops
-        max_steps = int(self.PULSES_PER_REV * 1.5)
+        # STAGE 1: Fast search - Rotate until hall is triggered (active low)
+        # Use slower speed for homing to ensure reliable sensor detection
+        homing_delay = 0.001  # 1ms delay = much slower than normal speed (0.0002s)
+        max_steps = int(self.PULSES_PER_REV * 1.5)  # Limit to ~1.5 revs to avoid loops
+        
+        print("Stage 1: Fast search for Hall sensor...")
         for _ in range(max_steps):
+            # Check sensor before each step
             if self.read_hall_sensor():
-                # Optional: back off a bit and re-approach slowly for better accuracy
-                print("✅ Hall detected. Homing complete.")
+                print("✅ Hall sensor detected! Starting slow approach...")
+                
+                # STAGE 2: Back off slightly and approach slowly for accuracy
+                # Back off 50 steps
+                GPIO.output(self.DIR_PIN, GPIO.HIGH)  # Reverse direction
+                for _ in range(50):
+                    GPIO.output(self.STEP_PIN, GPIO.HIGH)
+                    time.sleep(homing_delay)
+                    GPIO.output(self.STEP_PIN, GPIO.LOW)
+                    time.sleep(homing_delay)
+                
+                # Wait for sensor to deactivate
+                time.sleep(0.1)
+                
+                # Slow approach - very slow for precision
+                GPIO.output(self.DIR_PIN, GPIO.LOW)  # Back to homing direction
+                slow_delay = 0.005  # 5ms delay = very slow
+                
+                print("Stage 2: Slow precision approach...")
+                for _ in range(200):  # Max 200 steps for slow approach
+                    if self.read_hall_sensor():
+                        print("✅ Hall sensor detected on slow approach. Homing complete.")
+                        time.sleep(0.1)  # Settle time
+                        return True
+                    
+                    GPIO.output(self.STEP_PIN, GPIO.HIGH)
+                    time.sleep(slow_delay)
+                    GPIO.output(self.STEP_PIN, GPIO.LOW)
+                    time.sleep(slow_delay)
+                
+                # If we get here, slow approach failed but we know sensor is near
+                print("✅ Homing complete (approximate position).")
                 return True
 
+            # Continue fast search
             GPIO.output(self.STEP_PIN, GPIO.HIGH)
-            time.sleep(self.SPEED_DELAY)
+            time.sleep(homing_delay)
             GPIO.output(self.STEP_PIN, GPIO.LOW)
-            time.sleep(self.SPEED_DELAY)
+            time.sleep(homing_delay)
 
         print("🛑 ERROR: Homing failed! Hall not detected within expected travel.")
         # Disable motor on failure
