@@ -16,7 +16,7 @@ The key catcher motor uses the following GPIO pins (BCM numbering):
 |--------------|----------|-------------|
 | STEP | GPIO 12 | Step signal (PUL+) |
 | DIR | GPIO 13 | Direction signal (DIR+) |
-| ENABLE | GPIO 14 | Enable/Disable (ENA) |
+| ENABLE | GPIO 6 | Enable/Disable (ENA) |
 
 ### Power Requirements
 
@@ -48,7 +48,7 @@ Raspberry Pi 4              │                  │         └─────�
 ┌─────────────┐             │                  │
 │ GPIO 12 ────┼─────────────┤ PUL+             │
 │ GPIO 13 ────┼─────────────┤ DIR+             │
-│ GPIO 14 ────┼─────────────┤ ENA              │
+│ GPIO 6 ─────┼─────────────┤ ENA              │
 │ GND ────────┼─────────────┤ GND              │
 └─────────────┘             └──────────────────┘
 
@@ -165,7 +165,7 @@ POST /api/key_catcher/resume
 
 1. **Check Power Supply**: Verify 12V external supply is connected and powered
 2. **Check Enable Pin**: Motor driver should show enabled (LED indicator)
-3. **Check Wiring**: Verify GPIO 12, 13, 14 connections
+3. **Check Wiring**: Verify GPIO 12, 13, 6 connections
 4. **Check DIP Switches**: Ensure 4x microstepping (MS1=OFF, MS2=ON, MS3=OFF)
 
 ### Position Tracking Issues

@@ -41,12 +41,12 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 | **Key Catcher Motor (SERVO42C #2)** | | | |
 | STEP | 12 | Step signal (PUL+) | NEW |
 | DIR | 13 | Direction (DIR+) | NEW |
-| ENABLE | 14 | Enable/Disable (ENA) | NEW |
+| ENABLE | 6 | Enable/Disable (ENA) | NEW |
 | **Limit Switches (896F)** | | | |
 | Slider MIN | 27 | Inward limit | |
 | Slider MAX | 17 | Outward limit | ⚠️ **UPDATED** |
 | Home Switch | 5 | Legacy home (optional) | |
-| End Switch | 6 | Legacy end (optional) | |
+| End Switch | ~~6~~ | ~~Legacy end (optional)~~ | ⚠️ **NOW USED BY KEY CATCHER** |
 | **Pico Communication** | | | |
 | Pico Trigger | 4 | Trigger pulse to Pico | NEW |
 

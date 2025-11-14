@@ -40,7 +40,7 @@ class HardwareController:
         # --- ADDED: Key catcher motor control pins (MKS SERVO42C #2) ---
         self.KEY_CATCHER_STEP_PIN = 12
         self.KEY_CATCHER_DIR_PIN = 13
-        self.KEY_CATCHER_ENABLE_PIN = 14
+        self.KEY_CATCHER_ENABLE_PIN = 6
 
         # --- Key Catcher Configuration (12V Supply) ---
         # SERVO42C with 12V supply - same as slider motor
