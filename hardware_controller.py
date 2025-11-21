@@ -29,13 +29,13 @@ class HardwareController:
         # --- SERVO42C Configuration (12V Supply) ---
         # SERVO42C with 12V supply - balanced performance
         # Recommended: 4x microstepping (800 pulses/rev) for 12V operation
-        self.SLIDER_PULSES_PER_REV = 400  # 4x microstepping (optimized for 12V)
+        self.SLIDER_PULSES_PER_REV = 800  # 4x microstepping (optimized for 12V)
         self.SLIDER_MAX_PULSE_RATE = 25000  # SERVO42C with 12V can handle 25kHz+
         
         # --- ADDED: Slider motor limit switches ---
         # NOTE: Adjust these BCM pins to match wiring for the slider rail.
-        self.SLIDER_MIN_PIN = 12  # Changed from 4 (now used for key catcher)
-        self.SLIDER_MAX_PIN = 17
+        self.SLIDER_MIN_PIN = 4  # Slider MIN limit switch
+        self.SLIDER_MAX_PIN = 17  # Slider MAX limit switch
 
         # --- ADDED: Key catcher motor control pins (MKS SERVO42C #2) ---
         self.KEY_CATCHER_STEP_PIN = 26

@@ -814,6 +814,7 @@ def emergency_stop():
     try:
         hw.enable_rotary_motor(False)
         hw.enable_slider_motor(False)
+        hw.enable_key_catcher_motor(False)
     except Exception as e:
         print(f"Error disabling motors during E-Stop: {e}")
     
