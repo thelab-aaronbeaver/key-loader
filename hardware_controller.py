@@ -9,16 +9,16 @@ class HardwareController:
         # Rotary Motor (OMC Closed-Loop Stepper)
         self.STEP_PIN = 20
         self.DIR_PIN = 21
-        self.ENABLE_PIN = 19  # Enable pin for rotary motor
+        self.ENABLE_PIN = 12  # Enable pin for rotary motor
         self.ALM_PIN = 16
         
         # Sensors
-        self.HALL_PIN = 5
+        self.HALL_PIN = 27
         self.INDUCTIVE_PIN = 22
         
         # --- ADDED: Legacy rotary limit switch pins (optional) ---
-        self.HOME_SWITCH_PIN = 5  # Optional legacy home switch (not required if using hall)
-        self.END_SWITCH_PIN = 6   # Optional second switch
+        self.HOME_SWITCH_PIN = 7  # Optional legacy home switch (not required if using hall)
+        self.END_SWITCH_PIN = 8   # Optional second switch
 
         # --- ADDED: Slider motor control pins (MKS SERVO42C) ---
         self.SLIDER_STEP_PIN = 23
@@ -34,13 +34,17 @@ class HardwareController:
         
         # --- ADDED: Slider motor limit switches ---
         # NOTE: Adjust these BCM pins to match wiring for the slider rail.
-        self.SLIDER_MIN_PIN = 27
+        self.SLIDER_MIN_PIN = 12  # Changed from 4 (now used for key catcher)
         self.SLIDER_MAX_PIN = 17
 
         # --- ADDED: Key catcher motor control pins (MKS SERVO42C #2) ---
-        self.KEY_CATCHER_STEP_PIN = 12
-        self.KEY_CATCHER_DIR_PIN = 13
-        self.KEY_CATCHER_ENABLE_PIN = 6
+        self.KEY_CATCHER_STEP_PIN = 26
+        self.KEY_CATCHER_DIR_PIN = 19
+        self.KEY_CATCHER_ENABLE_PIN = 13
+        
+        # --- ADDED: Key catcher limit switches ---
+        self.KEY_CATCHER_HOME_PIN = 6   # Home position limit switch
+        self.KEY_CATCHER_MAX_PIN = 5    # Max/pause/stop position limit switch
 
         # --- Key Catcher Configuration (12V Supply) ---
         # SERVO42C with 12V supply - same as slider motor
@@ -90,6 +94,10 @@ class HardwareController:
         GPIO.setup(self.KEY_CATCHER_STEP_PIN, GPIO.OUT)
         GPIO.setup(self.KEY_CATCHER_DIR_PIN, GPIO.OUT)
         GPIO.setup(self.KEY_CATCHER_ENABLE_PIN, GPIO.OUT)
+        
+        # --- ADDED: Setup key catcher limit switches ---
+        GPIO.setup(self.KEY_CATCHER_HOME_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(self.KEY_CATCHER_MAX_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         
         # Initialize enable pins (motors disabled by default)
         GPIO.output(self.ENABLE_PIN, GPIO.HIGH)  # HIGH = disabled for most drivers
@@ -276,6 +284,35 @@ class HardwareController:
         # Return True only if majority of readings are True
         return sum(readings) >= 3
 
+    # --- ADDED: Key catcher limit switch reads ---
+    def read_key_catcher_home(self):
+        """Read key catcher HOME limit switch (non-debounced)."""
+        return GPIO.input(self.KEY_CATCHER_HOME_PIN) == GPIO.LOW
+
+    def read_key_catcher_max(self):
+        """Read key catcher MAX limit switch (non-debounced)."""
+        return GPIO.input(self.KEY_CATCHER_MAX_PIN) == GPIO.LOW
+
+    def read_key_catcher_home_debounced(self):
+        """Read key catcher HOME switch with debouncing to prevent phantom triggers."""
+        readings = []
+        for _ in range(5):  # Take 5 readings
+            readings.append(GPIO.input(self.KEY_CATCHER_HOME_PIN) == GPIO.LOW)
+            time.sleep(0.001)  # 1ms delay
+        
+        # Return True only if majority of readings are True
+        return sum(readings) >= 3
+
+    def read_key_catcher_max_debounced(self):
+        """Read key catcher MAX switch with debouncing to prevent phantom triggers."""
+        readings = []
+        for _ in range(5):  # Take 5 readings
+            readings.append(GPIO.input(self.KEY_CATCHER_MAX_PIN) == GPIO.LOW)
+            time.sleep(0.001)  # 1ms delay
+        
+        # Return True only if majority of readings are True
+        return sum(readings) >= 3
+
     # --- ADDED: Slider movement helpers ---
     def slider_move_to_max(self, speed: int, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50, ultra_fast: bool = False) -> bool:
         """Drive slider outward until MAX switch triggers or max_pulses reached with acceleration/deceleration."""
@@ -446,7 +483,46 @@ class HardwareController:
         return False
 
     # --- ADDED: Key catcher motor control methods ---
-    def key_catcher_move_steps(self, steps, speed=80, direction=1):
+    def key_catcher_home(self, speed=50, max_steps=5000):
+        """
+        Home the key catcher by moving towards the HOME limit switch.
+        
+        Args:
+            speed: Speed (0-100)
+            max_steps: Maximum steps to travel before giving up
+        
+        Returns:
+            bool: True if homing successful, False otherwise
+        """
+        print("Key catcher homing sequence started...")
+        
+        # Enable motor
+        self.enable_key_catcher_motor(True)
+        time.sleep(0.1)  # Allow motor to enable
+        
+        # Move towards home (reverse direction)
+        GPIO.output(self.KEY_CATCHER_DIR_PIN, GPIO.LOW)
+        
+        # Convert speed to delay
+        speed_delay = self._servo42c_speed_to_delay(speed)
+        
+        # Move until HOME switch is triggered or max steps reached
+        for step in range(max_steps):
+            if self.read_key_catcher_home_debounced():
+                print(f"✅ Key catcher HOME switch triggered at step {step}")
+                # Reset position to 0 since we're at home
+                self.key_catcher_current_position = 0
+                return True
+            
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.HIGH)
+            time.sleep(speed_delay)
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.LOW)
+            time.sleep(speed_delay)
+        
+        print(f"🛑 ERROR: Key catcher homing failed! HOME switch not triggered within {max_steps} steps")
+        return False
+    
+    def key_catcher_move_steps(self, steps, speed=80, direction=1, check_limits=True):
         """
         Move the key catcher motor a specific number of steps.
         
@@ -566,6 +642,143 @@ class HardwareController:
         """Reset the key counter."""
         self.key_catcher_keys_processed = 0
         print("Key catcher key count reset to 0")
+    
+    def key_catcher_test_cycle(self, speed=80):
+        """
+        Test the key catcher by moving from home to pause/stop position and back.
+        
+        This function:
+        1. Homes to the HOME limit switch (pin 6)
+        2. Moves forward until the MAX/PAUSE limit switch is triggered (pin 5)
+        3. Returns back to HOME position
+        
+        Args:
+            speed: Speed (0-100) for movements
+        
+        Returns:
+            dict: Test results with success status and messages
+        """
+        results = {
+            "success": False,
+            "home_success": False,
+            "max_success": False,
+            "return_success": False,
+            "messages": []
+        }
+        
+        print(f"\n{'='*80}")
+        print(f"🔧 KEY CATCHER TEST CYCLE STARTED")
+        print(f"{'='*80}\n")
+        
+        # Step 1: Home to HOME limit switch (pin 6)
+        print("Step 1: Homing to HOME limit switch (pin 6)...")
+        results["messages"].append("Homing to HOME limit switch...")
+        
+        home_success = self.key_catcher_home(speed=speed, max_steps=8000)
+        results["home_success"] = home_success
+        
+        if not home_success:
+            results["messages"].append("❌ FAILED: Could not reach HOME limit switch")
+            print(f"\n{'='*80}")
+            print(f"❌ TEST FAILED: Could not reach HOME limit switch")
+            print(f"{'='*80}\n")
+            return results
+        
+        results["messages"].append("✅ HOME limit switch reached")
+        print("✅ HOME limit switch reached at pin 6")
+        time.sleep(0.5)  # Brief pause at home
+        
+        # Step 2: Move forward until MAX/PAUSE limit switch is triggered (pin 5)
+        print("\nStep 2: Moving to PAUSE/STOP limit switch (pin 5)...")
+        results["messages"].append("Moving to PAUSE/STOP limit switch...")
+        
+        # Enable motor
+        self.enable_key_catcher_motor(True)
+        time.sleep(0.1)
+        
+        # Set direction forward
+        GPIO.output(self.KEY_CATCHER_DIR_PIN, GPIO.HIGH)
+        
+        # Convert speed to delay
+        speed_delay = self._servo42c_speed_to_delay(speed)
+        
+        # Move until MAX switch is triggered
+        max_steps = 8000  # Safety limit
+        steps_traveled = 0
+        max_triggered = False
+        
+        for step in range(max_steps):
+            if self.read_key_catcher_max_debounced():
+                print(f"✅ PAUSE/STOP limit switch triggered at step {step}")
+                results["messages"].append(f"✅ PAUSE/STOP limit switch reached after {step} steps")
+                max_triggered = True
+                steps_traveled = step
+                break
+            
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.HIGH)
+            time.sleep(speed_delay)
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.LOW)
+            time.sleep(speed_delay)
+        
+        results["max_success"] = max_triggered
+        
+        if not max_triggered:
+            results["messages"].append(f"❌ FAILED: PAUSE/STOP limit switch not reached within {max_steps} steps")
+            print(f"\n{'='*80}")
+            print(f"❌ TEST FAILED: PAUSE/STOP limit switch not reached")
+            print(f"{'='*80}\n")
+            return results
+        
+        time.sleep(0.5)  # Brief pause at max position
+        
+        # Step 3: Return to HOME position
+        print("\nStep 3: Returning to HOME position...")
+        results["messages"].append("Returning to HOME position...")
+        
+        # Set direction reverse
+        GPIO.output(self.KEY_CATCHER_DIR_PIN, GPIO.LOW)
+        
+        # Move back until HOME switch is triggered
+        return_steps = 0
+        home_reached = False
+        
+        # Give a little extra buffer for return trip
+        for step in range(steps_traveled + 500):
+            if self.read_key_catcher_home_debounced():
+                print(f"✅ Returned to HOME after {step} steps")
+                results["messages"].append(f"✅ Returned to HOME position after {step} steps")
+                home_reached = True
+                break
+            
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.HIGH)
+            time.sleep(speed_delay)
+            GPIO.output(self.KEY_CATCHER_STEP_PIN, GPIO.LOW)
+            time.sleep(speed_delay)
+            return_steps = step
+        
+        results["return_success"] = home_reached
+        
+        if not home_reached:
+            results["messages"].append(f"❌ WARNING: Did not detect HOME limit switch on return (traveled {return_steps} steps)")
+            print(f"⚠️  WARNING: Did not detect HOME limit switch on return")
+        
+        # Reset position tracking
+        self.key_catcher_current_position = 0
+        
+        # Final result
+        results["success"] = results["home_success"] and results["max_success"] and results["return_success"]
+        
+        print(f"\n{'='*80}")
+        if results["success"]:
+            print(f"✅ KEY CATCHER TEST CYCLE COMPLETE")
+            print(f"   - Home → Pause: {steps_traveled} steps")
+            print(f"   - Pause → Home: {return_steps} steps")
+            results["messages"].append(f"✅ Test complete! Travel distance: ~{steps_traveled} steps")
+        else:
+            print(f"⚠️  KEY CATCHER TEST COMPLETED WITH WARNINGS")
+        print(f"{'='*80}\n")
+        
+        return results
 
     def cleanup(self):
         """Clean up GPIO and disable all motors."""

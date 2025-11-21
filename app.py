@@ -1298,6 +1298,45 @@ def api_key_catcher_get_position():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
 
+@app.route('/api/key_catcher/test_cycle', methods=['POST'])
+def api_key_catcher_test_cycle():
+    """Test key catcher by moving from home to pause position and back."""
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+    
+    safe_update_app_state({
+        "is_running": True,
+        "system_message": "Starting key catcher test cycle..."
+    })
+    
+    try:
+        speed = config.get('key_catcher_speed', 80)
+        
+        # Run the test cycle
+        results = hw.key_catcher_test_cycle(speed=speed)
+        
+        # Build message from results
+        message = " | ".join(results["messages"])
+        
+        safe_set_app_state("system_message", message)
+        
+        return jsonify({
+            "success": results["success"],
+            "message": message,
+            "home_success": results["home_success"],
+            "max_success": results["max_success"],
+            "return_success": results["return_success"],
+            "details": results["messages"]
+        })
+        
+    except Exception as e:
+        error_msg = f"Key catcher test error: {str(e)}"
+        safe_set_app_state("system_message", error_msg)
+        return jsonify({"success": False, "message": error_msg})
+    finally:
+        safe_set_app_state("is_running", False)
+
 # --- LightBurn test endpoints ---
 @app.route('/api/lightburn/ping', methods=['POST'])
 def api_lightburn_ping():

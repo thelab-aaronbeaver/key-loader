@@ -79,6 +79,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnKeyCatcherReset) btnKeyCatcherReset.disabled = b;
         if (btnKeyCatcherSetStart) btnKeyCatcherSetStart.disabled = b;
         if (btnKeyCatcherSetPause) btnKeyCatcherSetPause.disabled = b;
+        const btnKeyCatcherTest = document.getElementById('btn-key-catcher-test');
+        if (btnKeyCatcherTest) btnKeyCatcherTest.disabled = b;
     }
 
     async function postJSON(url, body) {
@@ -297,6 +299,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await postJSON('/api/lightburn/start');
                 if (msg) msg.textContent = data.message;
             } catch (e) {
+                if (msg) msg.textContent = 'Error: ' + e.message;
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    // Key catcher test cycle button
+    const btnKeyCatcherTest = document.getElementById('btn-key-catcher-test');
+    if (btnKeyCatcherTest) {
+        btnKeyCatcherTest.addEventListener('click', async () => {
+            if (keyCatcherStatus) {
+                keyCatcherStatus.textContent = 'Testing full cycle...';
+                keyCatcherStatus.className = 'status-text testing';
+            }
+            if (msg) msg.textContent = 'Starting key catcher test cycle (Home → Pause → Home)...';
+            setBusy(true);
+            try {
+                const data = await postJSON('/api/key_catcher/test_cycle');
+                if (keyCatcherStatus) {
+                    if (data.success) {
+                        keyCatcherStatus.textContent = 'Test Complete ✅';
+                        keyCatcherStatus.className = 'status-text complete';
+                    } else {
+                        keyCatcherStatus.textContent = 'Test Failed ❌';
+                        keyCatcherStatus.className = 'status-text failed';
+                    }
+                }
+                if (msg) {
+                    // Show all detailed messages
+                    if (data.details && data.details.length > 0) {
+                        msg.textContent = data.details.join(' | ');
+                    } else {
+                        msg.textContent = data.message || 'Test completed';
+                    }
+                }
+                await updateKeyCatcherPosition();
+            } catch (e) {
+                if (keyCatcherStatus) {
+                    keyCatcherStatus.textContent = 'Test Error';
+                    keyCatcherStatus.className = 'status-text failed';
+                }
                 if (msg) msg.textContent = 'Error: ' + e.message;
             } finally {
                 setBusy(false);
