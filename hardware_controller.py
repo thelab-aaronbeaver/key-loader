@@ -43,8 +43,8 @@ class HardwareController:
         self.KEY_CATCHER_ENABLE_PIN = 13
         
         # --- ADDED: Key catcher limit switches ---
-        self.KEY_CATCHER_HOME_PIN = 6   # Home position limit switch
-        self.KEY_CATCHER_MAX_PIN = 5    # Max/pause/stop position limit switch
+        self.KEY_CATCHER_HOME_PIN = 5   # Home position limit switch
+        self.KEY_CATCHER_MAX_PIN = 6    # Max/pause/stop position limit switch
 
         # --- Key Catcher Configuration (12V Supply) ---
         # SERVO42C with 12V supply - same as slider motor
