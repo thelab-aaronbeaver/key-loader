@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const inductiveIndicator = document.getElementById('inductive');
     const sliderMinIndicator = document.getElementById('smin');
     const sliderMaxIndicator = document.getElementById('smax');
+    const keyCatcherHomeIndicator = document.getElementById('key-catcher-home');
+    const keyCatcherMaxIndicator = document.getElementById('key-catcher-max');
     const sliderStatusDisplay = document.getElementById('slider-status');
     const cyclesProgressDisplay = document.getElementById('cycles-progress');
     const currentPositionDisplay = document.getElementById('current-position'); // May not exist
@@ -168,6 +170,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (sliderMaxIndicator) {
             sliderMaxIndicator.classList.toggle('active', data.slider_max);
             console.log('Slider MAX:', data.slider_max ? 'ACTIVE' : 'INACTIVE');
+        }
+        if (keyCatcherHomeIndicator) {
+            keyCatcherHomeIndicator.classList.toggle('active', data.key_catcher_home);
+            console.log('Key Catcher HOME:', data.key_catcher_home ? 'ACTIVE' : 'INACTIVE');
+        }
+        if (keyCatcherMaxIndicator) {
+            keyCatcherMaxIndicator.classList.toggle('active', data.key_catcher_max);
+            console.log('Key Catcher MAX:', data.key_catcher_max ? 'ACTIVE' : 'INACTIVE');
         }
 
         // --- ADDED: Update cycle progress display ---

@@ -29,6 +29,9 @@ app_state = {
     # --- ADDED: Slider limit switch states ---
     "slider_min": False,
     "slider_max": False,
+    # --- ADDED: Key catcher limit switch states ---
+    "key_catcher_home": False,
+    "key_catcher_max": False,
     # --- ADDED: Cycle progress tracking ---
     "current_cycle": 0,
     "total_cycles": 0,
@@ -76,9 +79,9 @@ def load_config():
         "key_catcher_enabled": True,      # enable key catcher motor
         "key_catcher_steps_per_key": 80,  # steps to move per key detected
         "key_catcher_speed": 80,          # 0-100 speed scale for key catcher motor
-        "key_catcher_start_position": 0,  # starting position in steps
-        "key_catcher_pause_position": 4000,  # pause position in steps (50 keys * 80 steps)
-        "key_catcher_keys_before_pause": 50  # number of keys before pausing
+        "key_catcher_start_position": 0,  # starting position in steps (controlled by HOME limit switch GPIO 6)
+        "key_catcher_pause_position": 4000,  # pause position in steps (controlled by MAX limit switch GPIO 5)
+        "key_catcher_keys_before_pause": 50  # DEPRECATED: pause now triggered by MAX limit switch, not count
     }
     
     if os.path.exists(CONFIG_FILE):
@@ -123,6 +126,14 @@ def emit_status_update():
             except AttributeError:
                 app_state["slider_min"] = False
                 app_state["slider_max"] = False
+            
+            # --- ADDED: key catcher switches ---
+            try:
+                app_state["key_catcher_home"] = hw.read_key_catcher_home()
+                app_state["key_catcher_max"] = hw.read_key_catcher_max()
+            except AttributeError:
+                app_state["key_catcher_home"] = False
+                app_state["key_catcher_max"] = False
             
             # Create a copy for emission, excluding non-serializable objects
             state_copy = {k: v for k, v in app_state.items() if k != "cycle_thread"}
@@ -570,16 +581,16 @@ def run_cycle_background(total_cycles):
                         
                         print(f"🔧 Key catcher moved {steps_per_key} steps. Keys since reset: {keys_since_reset}")
                         
-                        # Check if we need to pause for key removal
-                        keys_before_pause = config.get('key_catcher_keys_before_pause', 50)
-                        if keys_since_reset >= keys_before_pause:
+                        # Check if MAX limit switch is triggered (tray is full)
+                        if hw.read_key_catcher_max():
                             print(f"\n{'='*80}")
-                            print(f"🛑 KEY CATCHER PAUSE: {keys_before_pause} keys processed")
+                            print(f"🛑 KEY CATCHER PAUSE: MAX limit switch triggered (tray full)")
+                            print(f"   Keys collected: {keys_since_reset}")
                             print(f"{'='*80}\n")
                             
                             safe_update_app_state({
                                 "key_catcher_paused": True,
-                                "system_message": f"⏸️  PAUSED: {keys_before_pause} keys collected. Please remove keys and click RESUME to continue.",
+                                "system_message": f"⏸️  PAUSED: Tray full ({keys_since_reset} keys collected). Please remove keys and click RESUME to continue.",
                                 "is_running": False
                             })
                             emit_status_update()
@@ -837,7 +848,7 @@ def emergency_stop_reset():
 
 @app.route('/api/key_catcher/resume', methods=['POST'])
 def key_catcher_resume():
-    """Resume cycle after key catcher pause - resets key catcher to start position."""
+    """Resume cycle after key catcher pause - resets position to HOME, keeps key counter."""
     current_state = safe_get_app_state()
     
     if not current_state["key_catcher_paused"]:
@@ -848,21 +859,22 @@ def key_catcher_resume():
         start_position = config.get('key_catcher_start_position', 0)
         speed = config.get('key_catcher_speed', 80)
         
+        keys_processed = hw.key_catcher_keys_processed
         print(f"\n{'='*80}")
         print(f"🔄 RESUMING: Resetting key catcher to start position ({start_position})")
+        print(f"   Total keys processed so far: {keys_processed}")
         print(f"{'='*80}\n")
         
         # Move to start position
         success = hw.key_catcher_move_to_position(start_position, speed)
         
         if success:
-            # Reset key counter
-            hw.key_catcher_reset_key_count()
+            # Keep key counter - it tracks total keys processed in the cycle
+            # Only reset position, not the key count
             
             # Clear pause state
             safe_update_app_state({
                 "key_catcher_paused": False,
-                "key_catcher_keys_since_reset": 0,
                 "is_running": True,
                 "system_message": "Resuming cycle... Key catcher reset to start position."
             })
@@ -961,6 +973,15 @@ def get_status():
             # Backward compatibility if methods not present
             app_state["slider_min"] = False
             app_state["slider_max"] = False
+        
+        # --- ADDED: key catcher switches ---
+        try:
+            app_state["key_catcher_home"] = hw.read_key_catcher_home()
+            app_state["key_catcher_max"] = hw.read_key_catcher_max()
+        except AttributeError:
+            # Backward compatibility if methods not present
+            app_state["key_catcher_home"] = False
+            app_state["key_catcher_max"] = False
         # Filter out non-serializable objects (like cycle_thread)
         return jsonify({k: v for k, v in app_state.items() if k != "cycle_thread"})
 

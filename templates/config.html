@@ -27,6 +27,10 @@
                 <div class="flex-item"><span class="divider"></span></div>
                 <div class="flex-item">Slider OUT <span id="smax" class="indicator_config"></span></div>
                 <div class="flex-item"><span class="divider"></span></div>
+                <div class="flex-item">Catcher HOME <span id="key-catcher-home" class="indicator_config"></span></div>
+                <div class="flex-item"><span class="divider"></span></div>
+                <div class="flex-item">Catcher MAX <span id="key-catcher-max" class="indicator_config"></span></div>
+                <div class="flex-item"><span class="divider"></span></div>
                 <div class="flex-item">Slider Status <span id="slider-status" class="status-text">Ready</span></div>
             </div>
         </div>
@@ -40,15 +44,12 @@
                         <button id="btn-set-zero" class="btn-back">Set Home</button>
                     </div>
                     <div class="row">
-                        <label for="degrees">Move Degrees</label>
-                        <input id="degrees" type="number" step="1" value="36">
+                        <button id="btn-move-fwd" class="btn-move">Move + 0.5°</button>
+                        <button id="btn-move-bwd" class="btn-back">Move - 0.5°</button>
                     </div>
                     <div class="row">
-                        <button id="btn-move-fwd" class="btn-move">Move +</button>
-                        <button id="btn-move-bwd" class="btn-back">Move -</button>
-                    </div>
-                    <div class="row">
-                        <div class="info-text">Use Move +/- to fine-tune position, then Set Zero to update home position
+                        <div class="info-text">Use Move +/- to fine-tune position (0.5° increments), then Set Home to
+                            update home position and save to config
                         </div>
                     </div>
                 </div>
@@ -113,28 +114,6 @@
                     </div>
                     <div class="row">
                         <div class="info-text">Keys Processed: <span id="key-catcher-keys">0</span></div>
-                    </div>
-                </div>
-                <div class="flex-item"><span class="divider"></span></div>
-                <div class="flex-item">
-                    <h3>Position Setup</h3>
-                    <div class="row">
-                        <button id="btn-key-catcher-set-start" class="btn-move">Set as Start Position</button>
-                    </div>
-                    <div class="row">
-                        <button id="btn-key-catcher-set-pause" class="btn-back">Set as Pause Position</button>
-                    </div>
-                    <div class="row">
-                        <div class="tooltip">Details
-                            <span class="tooltiptext">Move to desired position using controls, then click to save as
-                                start or pause position</span>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="info-text">Start Position: <span id="key-catcher-start-pos">0</span> steps</div>
-                    </div>
-                    <div class="row">
-                        <div class="info-text">Pause Position: <span id="key-catcher-pause-pos">4000</span> steps</div>
                     </div>
                 </div>
                 <div class="flex-item"><span class="divider"></span></div>
@@ -266,9 +245,8 @@
                 <input id="key_catcher_speed" type="number" min="0" max="100" step="1" value="80">
             </div>
             <div class="row">
-                <label for="key_catcher_keys_before_pause">Keys Before Pause</label>
-                <input id="key_catcher_keys_before_pause" type="number" min="1" step="1" value="50">
-                <div class="info-text">Number of keys to process before pausing for removal</div>
+                <div class="info-text">Key catcher will automatically pause when MAX limit switch is triggered (tray
+                    full)</div>
             </div>
             <div class="row">
                 <label for="laser_ip">Laser IP Address (Legacy)</label>

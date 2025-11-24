@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnHome = document.getElementById('btn-home');
     const btnFwd = document.getElementById('btn-move-fwd');
     const btnBwd = document.getElementById('btn-move-bwd');
-    const inputDeg = document.getElementById('degrees');
     const btnSetZero = document.getElementById('btn-set-zero');
     const btnSliderTest = document.getElementById('btn-slider-test');
     const sliderStatus = document.getElementById('slider-status');
@@ -44,24 +43,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const inductive = document.getElementById('inductive');
     const smin = document.getElementById('smin');
     const smax = document.getElementById('smax');
+    const keyCatcherHome = document.getElementById('key-catcher-home');
+    const keyCatcherMax = document.getElementById('key-catcher-max');
 
     // Key catcher elements
     const btnKeyCatcherMove = document.getElementById('btn-key-catcher-move');
     const btnKeyCatcherGoto = document.getElementById('btn-key-catcher-goto');
     const btnKeyCatcherReset = document.getElementById('btn-key-catcher-reset');
-    const btnKeyCatcherSetStart = document.getElementById('btn-key-catcher-set-start');
-    const btnKeyCatcherSetPause = document.getElementById('btn-key-catcher-set-pause');
     const inpKeyCatcherSteps = document.getElementById('key-catcher-steps');
     const inpKeyCatcherTarget = document.getElementById('key-catcher-target');
     const spanKeyCatcherPosition = document.getElementById('key-catcher-position');
     const spanKeyCatcherKeys = document.getElementById('key-catcher-keys');
-    const spanKeyCatcherStartPos = document.getElementById('key-catcher-start-pos');
-    const spanKeyCatcherPausePos = document.getElementById('key-catcher-pause-pos');
     const keyCatcherStatus = document.getElementById('key-catcher-status');
     const inpKeyCatcherEnabled = document.getElementById('key_catcher_enabled');
     const inpKeyCatcherStepsPerKey = document.getElementById('key_catcher_steps_per_key');
     const inpKeyCatcherSpeed = document.getElementById('key_catcher_speed');
-    const inpKeyCatcherKeysBeforePause = document.getElementById('key_catcher_keys_before_pause');
 
     function setBusy(b) {
         if (btnHome) btnHome.disabled = b;
@@ -77,8 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnKeyCatcherMove) btnKeyCatcherMove.disabled = b;
         if (btnKeyCatcherGoto) btnKeyCatcherGoto.disabled = b;
         if (btnKeyCatcherReset) btnKeyCatcherReset.disabled = b;
-        if (btnKeyCatcherSetStart) btnKeyCatcherSetStart.disabled = b;
-        if (btnKeyCatcherSetPause) btnKeyCatcherSetPause.disabled = b;
         const btnKeyCatcherTest = document.getElementById('btn-key-catcher-test');
         if (btnKeyCatcherTest) btnKeyCatcherTest.disabled = b;
     }
@@ -110,9 +104,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (btnFwd && inputDeg) {
+    if (btnFwd) {
         btnFwd.addEventListener('click', async () => {
-            const deg = parseFloat(inputDeg.value) || 0;
+            const deg = 0.5;  // Fixed 0.5 degree increment
             if (msg) msg.textContent = `Moving +${deg}°...`;
             setBusy(true);
             try {
@@ -126,9 +120,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (btnBwd && inputDeg) {
+    if (btnBwd) {
         btnBwd.addEventListener('click', async () => {
-            const deg = parseFloat(inputDeg.value) || 0;
+            const deg = 0.5;  // Fixed 0.5 degree increment
             if (msg) msg.textContent = `Moving -${deg}°...`;
             setBusy(true);
             try {
@@ -149,6 +143,15 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const data = await postJSON('/api/rotary/set_zero');
                 if (msg) msg.textContent = data.message || 'Home position updated';
+
+                // Automatically update the home offset in the config section
+                if (data.success && data.home_offset !== undefined) {
+                    if (inpHomeOffset) {
+                        inpHomeOffset.value = data.home_offset.toFixed(1);
+                    }
+                    // Reload the full config to ensure everything is in sync
+                    await loadConfig();
+                }
             } catch (e) {
                 if (msg) msg.textContent = 'Error: ' + e.message;
             } finally {
@@ -424,42 +427,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (btnKeyCatcherSetStart) {
-        btnKeyCatcherSetStart.addEventListener('click', async () => {
-            try {
-                const res = await fetch('/api/key_catcher/get_position');
-                const data = await res.json();
-                if (data.success) {
-                    if (inpKeyCatcherStepsPerKey) {
-                        // Calculate the start position (saved in config)
-                        const startPos = data.position;
-                        if (spanKeyCatcherStartPos) spanKeyCatcherStartPos.textContent = startPos;
-                        // Will be saved when user clicks Save button
-                        if (msg) msg.textContent = `Start position set to ${startPos} (click Save to persist)`;
-                    }
-                }
-            } catch (e) {
-                if (msg) msg.textContent = 'Error: ' + e.message;
-            }
-        });
-    }
-
-    if (btnKeyCatcherSetPause) {
-        btnKeyCatcherSetPause.addEventListener('click', async () => {
-            try {
-                const res = await fetch('/api/key_catcher/get_position');
-                const data = await res.json();
-                if (data.success) {
-                    const pausePos = data.position;
-                    if (spanKeyCatcherPausePos) spanKeyCatcherPausePos.textContent = pausePos;
-                    if (msg) msg.textContent = `Pause position set to ${pausePos} (click Save to persist)`;
-                }
-            } catch (e) {
-                if (msg) msg.textContent = 'Error: ' + e.message;
-            }
-        });
-    }
-
     async function updateKeyCatcherPosition() {
         try {
             const res = await fetch('/api/key_catcher/get_position');
@@ -523,6 +490,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 smax.classList.toggle('active', !!data.slider_max);
                 console.log('Config - Slider MAX:', data.slider_max ? 'ACTIVE' : 'INACTIVE');
             }
+            if (keyCatcherHome) {
+                keyCatcherHome.classList.toggle('active', !!data.key_catcher_home);
+                console.log('Config - Key Catcher HOME:', data.key_catcher_home ? 'ACTIVE' : 'INACTIVE');
+            }
+            if (keyCatcherMax) {
+                keyCatcherMax.classList.toggle('active', !!data.key_catcher_max);
+                console.log('Config - Key Catcher MAX:', data.key_catcher_max ? 'ACTIVE' : 'INACTIVE');
+            }
 
             // Update status displays
             if (sliderStatus) {
@@ -580,9 +555,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inpKeyCatcherEnabled) inpKeyCatcherEnabled.checked = cfg.key_catcher_enabled !== false;
             if (inpKeyCatcherStepsPerKey) inpKeyCatcherStepsPerKey.value = cfg.key_catcher_steps_per_key || 80;
             if (inpKeyCatcherSpeed) inpKeyCatcherSpeed.value = cfg.key_catcher_speed || 80;
-            if (inpKeyCatcherKeysBeforePause) inpKeyCatcherKeysBeforePause.value = cfg.key_catcher_keys_before_pause || 50;
-            if (spanKeyCatcherStartPos) spanKeyCatcherStartPos.textContent = cfg.key_catcher_start_position || 0;
-            if (spanKeyCatcherPausePos) spanKeyCatcherPausePos.textContent = cfg.key_catcher_pause_position || 4000;
 
             // Update key catcher position
             updateKeyCatcherPosition();
@@ -616,10 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         use_lightburn_status: inpUseLightburnStatus?.checked !== false,
                         key_catcher_enabled: inpKeyCatcherEnabled?.checked !== false,
                         key_catcher_steps_per_key: parseInt(inpKeyCatcherStepsPerKey?.value || 80, 10),
-                        key_catcher_speed: parseInt(inpKeyCatcherSpeed?.value || 80, 10),
-                        key_catcher_start_position: parseInt(spanKeyCatcherStartPos?.textContent || 0, 10),
-                        key_catcher_pause_position: parseInt(spanKeyCatcherPausePos?.textContent || 4000, 10),
-                        key_catcher_keys_before_pause: parseInt(inpKeyCatcherKeysBeforePause?.value || 50, 10)
+                        key_catcher_speed: parseInt(inpKeyCatcherSpeed?.value || 80, 10)
                     })
                 });
                 const data = await res.json();
