@@ -12,20 +12,19 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 ┌──────────────────────────────────────────────────────────────────┐
 │  GPIO PIN ASSIGNMENT SUMMARY (BCM Numbering)                     │
 ├──────────────────────────────────────────────────────────────────┤
-│  GPIO 4  → Pico Trigger (output to Raspberry Pico)              │
-│  GPIO 5  → Key Catcher MAX/PAUSE Limit Switch (input)           │
-│  GPIO 6  → Key Catcher HOME Limit Switch (input)                │
+│  GPIO 4  → Slider MIN Limit Switch (input)                      │
+│  GPIO 5  → Key Catcher HOME Limit Switch (input)                │
+│  GPIO 6  → Key Catcher MAX/PAUSE Limit Switch (input)           │
 │  GPIO 7  → Legacy Home Switch - optional (input)                │
 │  GPIO 8  → Legacy End Switch - optional (input)                 │
-│  GPIO 12 → Slider MIN Limit Switch (input)                      │
+│  GPIO 12 → Rotary Motor ENABLE (output)                         │
 │  GPIO 13 → Key Catcher Motor ENABLE (output)                    │
 │  GPIO 16 → Rotary Motor ALARM (input)                           │
 │  GPIO 17 → Slider MAX Limit Switch (input)                      │
-│  GPIO 18 → Slider Motor ALARM (input)                           │
-│  GPIO 19 → Rotary Motor ENABLE + Key Catcher DIR ⚠️ CONFLICT!   │
+│  GPIO 18 → Inductive Sensor (key detection, input)              │
+│  GPIO 19 → Key Catcher Motor DIR (output)                       │
 │  GPIO 20 → Rotary Motor STEP (output)                           │
 │  GPIO 21 → Rotary Motor DIR (output)                            │
-│  GPIO 22 → Inductive Sensor (key detection, input)              │
 │  GPIO 23 → Slider Motor STEP (output)                           │
 │  GPIO 24 → Slider Motor DIR (output)                            │
 │  GPIO 25 → Slider Motor ENABLE (output)                         │
@@ -33,10 +32,7 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 │  GPIO 27 → Hall Sensor (home detection, input)                  │
 └──────────────────────────────────────────────────────────────────┘
 
-⚠️ CRITICAL: GPIO 19 is shared between Rotary Motor ENABLE and 
-              Key Catcher Motor DIR - see warning section below!
-
-Available for future use: GPIO 9, 10, 11, 14, 15
+Available for future use: GPIO 9, 10, 11, 14, 15, 22
 ```
 
 ---
@@ -63,29 +59,26 @@ Available for future use: GPIO 9, 10, 11, 14, 15
 | **Rotary Motor (CL57T)** | | | |
 | STEP | 20 | Step signal (PUL+) | |
 | DIR | 21 | Direction (DIR+) | |
-| ENABLE | 12 | Enable/Disable (EN+) | |
+| ENABLE | 12 | Enable/Disable (EN+) | ✅ **UPDATED** |
 | ALARM | 16 | Stall detection (ALM+) | |
 | **Sensors** | | | |
-| Hall Sensor | 27 | Home position (NJK-5002C) | ⚠️ **CORRECTED** |
-| Inductive Sensor | 22 | Key detection (LJ12A3-4-Z/BX) | |
+| Hall Sensor | 27 | Home position (NJK-5002C) | |
+| Inductive Sensor | 18 | Key detection (LJ12A3-4-Z/BX) | |
 | **Slider Motor (SERVO42C)** | | | |
 | STEP | 23 | Step signal (PUL+) | |
 | DIR | 24 | Direction (DIR+) | |
 | ENABLE | 25 | Enable/Disable (ENA) | |
-| ALARM | 18 | Stall detection (ALM) | |
 | **Key Catcher Motor (SERVO42C #2)** | | | |
-| STEP | 26 | Step signal (PUL+) | ⚠️ **CORRECTED** |
-| DIR | 19 | Direction (DIR+) | ⚠️ **SHARES WITH ROTARY ENABLE** |
-| ENABLE | 13 | Enable/Disable (ENA) | ⚠️ **CORRECTED** |
+| STEP | 26 | Step signal (PUL+) | |
+| DIR | 19 | Direction (DIR+) | ✅ **UPDATED** |
+| ENABLE | 13 | Enable/Disable (ENA) | |
 | **Limit Switches (896F)** | | | |
-| Slider MIN | 12 | Slider inward limit | ⚠️ **CORRECTED** |
+| Slider MIN | 4 | Slider inward limit | ✅ **UPDATED** |
 | Slider MAX | 17 | Slider outward limit | |
-| Key Catcher HOME | 6 | Key catcher home position | ⚠️ **NEW** |
-| Key Catcher MAX | 5 | Key catcher pause/stop position | ⚠️ **NEW** |
-| Legacy Home Switch | 7 | Legacy rotary home (optional) | ⚠️ **MOVED** |
-| Legacy End Switch | 8 | Legacy rotary end (optional) | ⚠️ **MOVED** |
-| **Pico Communication** | | | |
-| Pico Trigger | 4 | Trigger pulse to Pico | NEW |
+| Key Catcher HOME | 5 | Key catcher home position | ✅ **UPDATED** |
+| Key Catcher MAX | 6 | Key catcher pause/stop position | ✅ **UPDATED** |
+| Legacy Home Switch | 7 | Legacy rotary home (optional) | |
+| Legacy End Switch | 8 | Legacy rotary end (optional) | |
 
 ---
 
@@ -103,7 +96,6 @@ Available for future use: GPIO 9, 10, 11, 14, 15
     │  GPIO 23 ──┤  SERVO42C DRIVER #1                │
     │  GPIO 24 ──┤  (Slider Motor)                    │
     │  GPIO 25 ──┤                                    │
-    │  GPIO 18 ──┤                                    │
     │            │                                    │
     │  GPIO 26 ──┤  SERVO42C DRIVER #2                │
     │  GPIO 19 ──┤  (Key Catcher Motor - DIR)         │
@@ -111,16 +103,15 @@ Available for future use: GPIO 9, 10, 11, 14, 15
     │            │                                    │
     │  GPIO 27 ──┤  HALL SENSOR (NJK-5002C)          │
     │            │  └─ Voltage Divider (10kΩ/3.3kΩ)  │
-    │  GPIO 22 ──┤  INDUCTIVE SENSOR (LJ12A3-4-Z/BX) │
+    │  GPIO 18 ──┤  INDUCTIVE SENSOR (LJ12A3-4-Z/BX) │
     │            │  └─ Voltage Divider (10kΩ/3.3kΩ)  │
     │            │                                   │
-    │  GPIO 12 ──┤  SLIDER MIN SWITCH (896F)         │
+    │  GPIO 4  ──┤  SLIDER MIN SWITCH (896F)         │
     │  GPIO 17 ──┤  SLIDER MAX SWITCH (896F)         │
-    │  GPIO 6  ──┤  KEY CATCHER HOME SWITCH (896F)   │
-    │  GPIO 5  ──┤  KEY CATCHER MAX SWITCH (896F)    │
+    │  GPIO 5  ──┤  KEY CATCHER HOME SWITCH (896F)   │
+    │  GPIO 6  ──┤  KEY CATCHER MAX SWITCH (896F)    │
     │  GPIO 7  ──┤  LEGACY HOME SWITCH (optional)     │
     │  GPIO 8  ──┤  LEGACY END SWITCH (optional)      │
-    │  GPIO 4  ──┤  PICO TRIGGER (NEW)                │
     │            │                                    │
     │  GND ──────┼── COMMON GROUND                    │
     │  5V ───────┼── POWER FOR SENSORS                │
@@ -130,15 +121,15 @@ Available for future use: GPIO 9, 10, 11, 14, 15
                             │
     ┌───────────────────────┼───────────────────────┐
     │                       │                       │
-    │  CL57T DRIVER         │  TB6600 DRIVER        │
+    │  CL57T DRIVER         │  SERVO42C #1          │
     │  (Rotary Motor)       │  (Slider Motor)       │
     │  ┌─────────────────┐  │  ┌─────────────────┐  │
     │  │ PUL+ ── GPIO 20 │  │  │ STEP ── GPIO 23 │  │
     │  │ PUL- ── GND     │  │  │ DIR ── GPIO 24  │  │
-    │  │ DIR+ ── GPIO 21 │  │  │ EN ── GPIO 25   │  │
-    │  │ DIR- ── GND     │  │  │ GND ── GND      │  │
-    │  │ EN+ ── GPIO 19  │  │  │ VCC ── 12V      │  │
-    │  │ EN- ── GND      │  │  │                 │  │
+    │  │ DIR+ ── GPIO 21 │  │  │ ENA ── GPIO 25  │  │
+    │  │ DIR- ── GND     │  │  │ ALM ── GPIO 18  │  │
+    │  │ EN+ ── GPIO 12  │  │  │ GND ── GND      │  │
+    │  │ EN- ── GND      │  │  │ VCC ── 12V      │  │
     │  │ ALM+ ── GPIO 16 │  │  │                 │  │
     │  │ ALM- ── GND     │  │  │                 │  │
     │  │ VCC ── 48V PSU  │  │  │                 │  │
@@ -148,27 +139,46 @@ Available for future use: GPIO 9, 10, 11, 14, 15
     │  NEMA 23 MOTOR        │  NEMA 17 MOTOR        │
     │  (23HS45-4204D-E1000) │  (Pancake 1A)         │
     │  ┌─────────────────┐  │  ┌─────────────────┐  │
-    │  │ A+ ── CL57T     │  │  │ A+ ── TB6600    │  │
-    │  │ A- ── CL57T     │  │  │ A- ── TB6600    │  │
-    │  │ B+ ── CL57T     │  │  │ B+ ── TB6600    │  │
-    │  │ B- ── CL57T     │  │  │ B- ── TB6600    │  │
+    │  │ A+ ── CL57T     │  │  │ A+ ── SERVO42C  │  │
+    │  │ A- ── CL57T     │  │  │ A- ── SERVO42C  │  │
+    │  │ B+ ── CL57T     │  │  │ B+ ── SERVO42C  │  │
+    │  │ B- ── CL57T     │  │  │ B- ── SERVO42C  │  │
     │  └─────────────────┘  │  └─────────────────┘  │
     └───────────────────────┼───────────────────────┘
                             │
     ┌───────────────────────┼───────────────────────┐
-    │                       │                       │
-    │  LIMIT SWITCHES       │  SENSORS              │
-    │  (896F Mini x 4)      │  (Powered by LM317)   │
-    │  ┌─────────────────────────┐  ┌──────────────┐│
-    │  │ Slider MIN ── GPIO 12   │  │ HALL ── 10kΩ ── GPIO 27 │
-    │  │ Slider MAX ── GPIO 17   │  │       └─ 3.3kΩ ── GND   │
-    │  │ Key HOME ── GPIO 6      │  │ IND ── 10kΩ ── GPIO 22  │
-    │  │ Key MAX ── GPIO 5       │  │       └─ 3.3kΩ ── GND   │
-    │  │ COM ── GND (all)        │  │ VCC ── LM317    │  │
-    │  │ NO ── 5V (all)          │  │ GND ── GND      │  │
-    │  └─────────────────────────┘  └──────────────┘│
-    │                       │                       │
-    └───────────────────────┼───────────────────────┘
+    │  SERVO42C #2          │  SENSORS              │
+    │  (Key Catcher Motor)  │  (Powered by LM317)   │
+    │  ┌─────────────────┐  │  ┌──────────────────┐ │
+    │  │ STEP ── GPIO 26 │  │  │ HALL ── 10kΩ ──┐│ │
+    │  │ DIR ── GPIO 19  │  │  │     GPIO 27     ││ │
+    │  │ ENA ── GPIO 13  │  │  │     3.3kΩ ─ GND ││ │
+    │  │ GND ── GND      │  │  │                 ││ │
+    │  │ VCC ── 12V Ext  │  │  │ IND ── 10kΩ ──┐││ │
+    │  └─────────────────┘  │  │     GPIO 18    │││ │
+    │                       │  │     3.3kΩ ─ GND│││ │
+    │  NEMA 17 MOTOR        │  │  ⚠️ SHARED PIN │││ │
+    │  ┌─────────────────┐  │  │                │││ │
+    │  │ A+ ── SERVO42C  │  │  │ VCC ── LM317   ││ │
+    │  │ A- ── SERVO42C  │  │  │ GND ── GND     ││ │
+    │  │ B+ ── SERVO42C  │  │  └────────────────┘│ │
+    │  │ B- ── SERVO42C  │  │                     │ │
+    │  └─────────────────┘  │                     │ │
+    └───────────────────────┼─────────────────────┘
+                            │
+    ┌───────────────────────┼─────────────────────┐
+    │  LIMIT SWITCHES (896F Mini x 6)             │
+    │  ┌────────────────────────────────────────┐ │
+    │  │ Slider MIN ── GPIO 4                   │ │
+    │  │ Slider MAX ── GPIO 17                  │ │
+    │  │ Key HOME ── GPIO 5                     │ │
+    │  │ Key MAX ── GPIO 6                      │ │
+    │  │ Legacy Home ── GPIO 7 (optional)       │ │
+    │  │ Legacy End ── GPIO 8 (optional)        │ │
+    │  │ COM ── GND (all switches)              │ │
+    │  │ NO ── 5V (all switches)                │ │
+    │  └────────────────────────────────────────┘ │
+    └───────────────────────┼─────────────────────┘
                             │
                     ⚡ COMMON GROUND ⚡
 ```
@@ -209,8 +219,8 @@ External 12V Supply:
 
 ### **MKS SERVO42C Driver (Key Catcher Motor) Configuration:**
 - **Power**: 12V from External Power Supply
-- **GPIO Pins**: STEP=26, DIR=19 ⚠️(SHARED), ENABLE=13
-- **Limit Switches**: HOME=GPIO 6, MAX/PAUSE=GPIO 5
+- **GPIO Pins**: STEP=26, DIR=19, ENABLE=13
+- **Limit Switches**: HOME=GPIO 5, MAX/PAUSE=GPIO 6
 - **Microstepping**: 4x (800 steps/revolution) - **BALANCED FOR 12V**
 - **Current**: Set for motor rating (typically 1.0-2.0A)
 - **Enable Logic**: LOW = enabled, HIGH = disabled
@@ -219,8 +229,8 @@ External 12V Supply:
 - **Function**: Moves key catching tray after each key is processed
 - **Operation**: 
   - Moves configurable steps per key (default: 80 steps)
-  - Homes to GPIO 6 (HOME limit switch) at start
-  - Pauses at GPIO 5 (MAX limit switch) after set number of keys
+  - Homes to GPIO 5 (HOME limit switch) at start
+  - Pauses at GPIO 6 (MAX limit switch) when limit switch is triggered
   - Returns to home position when user resumes after key removal
 - **Test Cycle**: Full test available in config page (Home → Pause → Home)
 
@@ -252,10 +262,10 @@ Components needed:
 ### **896F Limit Switch Wiring:**
 ```
 896F Switch Connections:
-├── Slider MIN ── GPIO 12 (COM) + 5V (NO) + GND
+├── Slider MIN ── GPIO 4 (COM) + 5V (NO) + GND
 ├── Slider MAX ── GPIO 17 (COM) + 5V (NO) + GND
-├── Key Catcher HOME ── GPIO 6 (COM) + 5V (NO) + GND
-├── Key Catcher MAX ── GPIO 5 (COM) + 5V (NO) + GND
+├── Key Catcher HOME ── GPIO 5 (COM) + 5V (NO) + GND
+├── Key Catcher MAX ── GPIO 6 (COM) + 5V (NO) + GND
 ├── Legacy Home ── GPIO 7 (COM) + 5V (NO) + GND (optional)
 └── Legacy End ── GPIO 8 (COM) + 5V (NO) + GND (optional)
 
@@ -520,48 +530,60 @@ while True:
 
 ---
 
-## ⚠️ **CRITICAL WARNING: GPIO 19 PIN CONFLICT**
+## ⚠️ **CRITICAL WARNING: GPIO 18 PIN CONFLICT**
 
 ### **Current Configuration Issue:**
-**GPIO 19 is shared between two functions:**
-1. **Rotary Motor ENABLE** (CL57T Driver)
-2. **Key Catcher Motor DIR** (SERVO42C #2 Driver)
+**GPIO 18 is shared between two functions:**
+1. **Inductive Sensor** (Key detection input)
+2. **Slider Motor ALARM** (SERVO42C Driver fault detection input)
 
 ### **Impact:**
-- When rotary motor is enabled/disabled, key catcher direction may be affected
-- When key catcher changes direction, rotary motor enable state may be affected
-- This can cause unpredictable behavior during simultaneous operations
+- Both functions are INPUT pins, which is less critical than output conflicts
+- However, reading can be unreliable as both signals will be ORed together
+- If slider alarm triggers (goes LOW), inductive sensor reading will be affected
+- If inductive sensor activates (goes LOW), alarm status reading will be affected
+- This can cause false key detections or missed alarm conditions
 
 ### **Recommended Solutions:**
 
-#### **Option 1: Move Key Catcher DIR to Unused GPIO (RECOMMENDED)**
-Move Key Catcher DIR from GPIO 19 to an unused pin:
+#### **Option 1: Move Inductive Sensor to Unused GPIO (RECOMMENDED)**
+Move Inductive Sensor from GPIO 18 to an unused pin:
+- **GPIO 22** (currently unused) - BEST CHOICE, documented in original wiring
 - **GPIO 14** (currently unused)
 - **GPIO 15** (currently unused)
 - **GPIO 10** (currently unused)
 
 ```python
 # In hardware_controller.py
-self.KEY_CATCHER_DIR_PIN = 14  # Change from 19 to 14
+self.INDUCTIVE_PIN = 22  # Change from 18 to 22
 ```
 
-#### **Option 2: Move Rotary ENABLE to Unused GPIO**
-Move Rotary Enable from GPIO 19 to an unused pin:
+#### **Option 2: Move Slider ALARM to Unused GPIO**
+Move Slider ALARM from GPIO 18 to an unused pin:
 ```python
 # In hardware_controller.py
-self.ENABLE_PIN = 14  # Change from 19 to 14
+self.SLIDER_ALM_PIN = 22  # Change from 18 to 22
 ```
 
-#### **Option 3: Operational Workaround (Temporary)**
-If rewiring is not immediately possible:
-- Ensure rotary motor is always enabled during key catcher operations
-- Keep rotary ENABLE always LOW during production runs
-- Only disable motors during idle periods when neither is in use
+#### **Option 3: Disable Slider Alarm Monitoring (NOT RECOMMENDED)**
+If slider motor doesn't need alarm monitoring:
+```python
+# In hardware_controller.py
+# Comment out slider alarm setup
+# GPIO.setup(self.SLIDER_ALM_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+```
 
 ### **Testing After Fix:**
-1. Test rotary motor enable/disable independently
-2. Test key catcher direction changes independently
-3. Test simultaneous operations (key catcher moving while rotary is enabled)
-4. Verify no cross-interference between the two functions
+1. Test inductive sensor key detection independently
+2. Test slider motor operation and verify no false alarms
+3. Manually trigger slider alarm and verify detection
+4. Test key detection while slider is moving
+5. Verify no cross-interference between the two inputs
 
-**⚡ This pin conflict should be resolved as soon as possible to ensure reliable operation!**
+### **Why This Matters:**
+- The inductive sensor is critical for key detection in the main process
+- Slider alarm is important for detecting mechanical issues or stalls
+- Sharing GPIO pins between inputs can cause false readings
+- This conflict should be resolved before production use
+
+**⚡ Recommended Fix: Move INDUCTIVE_PIN to GPIO 22 immediately!**
