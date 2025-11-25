@@ -21,8 +21,8 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 │  GPIO 13 → Key Catcher Motor ENABLE (output)                    │
 │  GPIO 16 → Rotary Motor ALARM (input)                           │
 │  GPIO 17 → Slider MAX Limit Switch (input)                      │
-│  GPIO 18 → Inductive Sensor (key detection, input)              │
 │  GPIO 19 → Key Catcher Motor DIR (output)                       │
+│  GPIO 22 → Inductive Sensor (key detection, input)              │
 │  GPIO 20 → Rotary Motor STEP (output)                           │
 │  GPIO 21 → Rotary Motor DIR (output)                            │
 │  GPIO 23 → Slider Motor STEP (output)                           │
@@ -32,7 +32,7 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 │  GPIO 27 → Hall Sensor (home detection, input)                  │
 └──────────────────────────────────────────────────────────────────┘
 
-Available for future use: GPIO 9, 10, 11, 14, 15, 22
+Available for future use: GPIO 9, 10, 11, 14, 15, 18
 ```
 
 ---
@@ -63,7 +63,7 @@ Available for future use: GPIO 9, 10, 11, 14, 15, 22
 | ALARM | 16 | Stall detection (ALM+) | |
 | **Sensors** | | | |
 | Hall Sensor | 27 | Home position (NJK-5002C) | |
-| Inductive Sensor | 18 | Key detection (LJ12A3-4-Z/BX) | |
+| Inductive Sensor | 22 | Key detection (LJ12A3-4-Z/BX) | ✅ **UPDATED** |
 | **Slider Motor (SERVO42C)** | | | |
 | STEP | 23 | Step signal (PUL+) | |
 | DIR | 24 | Direction (DIR+) | |
@@ -103,7 +103,7 @@ Available for future use: GPIO 9, 10, 11, 14, 15, 22
     │            │                                    │
     │  GPIO 27 ──┤  HALL SENSOR (NJK-5002C)          │
     │            │  └─ Voltage Divider (10kΩ/3.3kΩ)  │
-    │  GPIO 18 ──┤  INDUCTIVE SENSOR (LJ12A3-4-Z/BX) │
+    │  GPIO 22 ──┤  INDUCTIVE SENSOR (LJ12A3-4-Z/BX) │
     │            │  └─ Voltage Divider (10kΩ/3.3kΩ)  │
     │            │                                   │
     │  GPIO 4  ──┤  SLIDER MIN SWITCH (896F)         │
