@@ -192,9 +192,9 @@ def test_inductive_sensor_detailed():
     try:
         INDUCTIVE_PIN = 22
         
-        # Setup with pull-up
-        GPIO.setup(INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        print(f"✅ Inductive sensor pin (GPIO {INDUCTIVE_PIN}) configured with pull-up")
+        # Setup with pull-down (due to weak voltage levels: 0.7V/0.3V)
+        GPIO.setup(INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        print(f"✅ Inductive sensor pin (GPIO {INDUCTIVE_PIN}) configured with pull-down")
         
         # Check initial state
         initial_state = GPIO.input(INDUCTIVE_PIN)
@@ -259,8 +259,14 @@ def test_inductive_sensor_detailed():
             print("   3. Voltage divider issue (should be 10kΩ + 3.3kΩ)")
             print("   4. Defective sensor")
             print("   5. Metal object too far (must be within 4mm)")
+            print("\n   📊 Your reported voltages: 0.7V (idle) / 0.3V (active)")
+            print("   These are TOO LOW! See inductive_sensor_fix.md for solutions.")
+            print("   Quick fix: Add 10kΩ pull-up from sensor output to +12V")
         else:
-            print("✅ Sensor is working!")
+            print("✅ Sensor is detecting!")
+            print("   Note: Voltage levels (0.7V/0.3V) are borderline.")
+            print("   For better reliability, add 10kΩ pull-up to +12V")
+            print("   See inductive_sensor_fix.md for details")
         
         return trigger_count > 0
         

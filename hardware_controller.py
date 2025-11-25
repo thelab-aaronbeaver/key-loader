@@ -73,7 +73,8 @@ class HardwareController:
         # Input pins (sensors and alarms)
         GPIO.setup(self.ALM_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.HALL_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.setup(self.INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        # Inductive sensor using pull-down due to weak voltage levels (0.7V/0.3V)
+        GPIO.setup(self.INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
         
         # --- ADDED: Setup limit switch pins ---
         GPIO.setup(self.HOME_SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -247,6 +248,18 @@ class HardwareController:
         return GPIO.input(self.HALL_PIN) == GPIO.LOW
 
     def read_inductive_sensor(self):
+        """Read inductive sensor with weak voltage levels.
+        
+        Current setup: 0.7V (no metal) / 0.3V (metal detected)
+        - 0.7V is just above GPIO threshold (~0.5-0.8V) - may read as HIGH
+        - 0.3V is below threshold - reads as LOW reliably
+        
+        Using pull-down to help stabilize the reading.
+        
+        ⚠️ IMPORTANT: Proper hardware fix needed!
+           Add 10kΩ pull-up resistor from sensor output to +12V
+           See inductive_sensor_fix.md for details
+        """
         return GPIO.input(self.INDUCTIVE_PIN) == GPIO.LOW
 
     # --- ADDED: Slider limit switch reads ---
