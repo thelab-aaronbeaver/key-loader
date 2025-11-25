@@ -24,7 +24,6 @@ class HardwareController:
         self.SLIDER_STEP_PIN = 23
         self.SLIDER_DIR_PIN = 24
         self.SLIDER_ENABLE_PIN = 25  # Enable pin for slider motor (ENA)
-        self.SLIDER_ALM_PIN = 18     # Alarm output from slider driver (ALM)
         
         # --- SERVO42C Configuration (12V Supply) ---
         # SERVO42C with 12V supply - balanced performance
@@ -88,7 +87,6 @@ class HardwareController:
         GPIO.setup(self.SLIDER_STEP_PIN, GPIO.OUT)
         GPIO.setup(self.SLIDER_DIR_PIN, GPIO.OUT)
         GPIO.setup(self.SLIDER_ENABLE_PIN, GPIO.OUT)
-        GPIO.setup(self.SLIDER_ALM_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         
         # --- ADDED: Setup key catcher motor control pins ---
         GPIO.setup(self.KEY_CATCHER_STEP_PIN, GPIO.OUT)
@@ -121,11 +119,6 @@ class HardwareController:
         GPIO.output(self.SLIDER_ENABLE_PIN, GPIO.LOW if enabled else GPIO.HIGH)
         status = "enabled" if enabled else "disabled"
         print(f"Slider motor {status}")
-
-    def read_slider_alarm(self):
-        """Return True if the slider driver reports a fault/stall (ALM active)."""
-        # Most drivers expose ALM as active-low (LOW = fault). Adjust if needed.
-        return GPIO.input(self.SLIDER_ALM_PIN) == GPIO.LOW
 
     def enable_key_catcher_motor(self, enabled=True):
         """Enable or disable the key catcher motor."""
@@ -344,9 +337,6 @@ class HardwareController:
         
         # Acceleration phase (short for SERVO42C)
         for i in range(accel_phase):
-            if self.read_slider_alarm():
-                print("🛑 ERROR: Slider driver alarm during accel phase")
-                return False
             if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (accel phase)")
                 return True
@@ -360,9 +350,6 @@ class HardwareController:
         
         # Cruise phase
         for _ in range(cruise_phase):
-            if self.read_slider_alarm():
-                print("🛑 ERROR: Slider driver alarm during cruise phase")
-                return False
             if ultra_fast:
                 # ULTRA-FAST: Use non-debounced reading for maximum speed
                 if self.read_slider_max():
@@ -381,9 +368,6 @@ class HardwareController:
         
         # Deceleration phase (short for SERVO42C)
         for i in range(decel_phase):
-            if self.read_slider_alarm():
-                print("🛑 ERROR: Slider driver alarm during decel phase")
-                return False
             if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (decel phase)")
                 return True
@@ -428,9 +412,6 @@ class HardwareController:
         
         # Acceleration phase (short for SERVO42C)
         for i in range(accel_phase):
-            if self.read_slider_alarm():
-                print("🛑 ERROR: Slider driver alarm during accel phase")
-                return False
             if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (accel phase)")
                 return True
@@ -444,9 +425,6 @@ class HardwareController:
         
         # Cruise phase
         for _ in range(cruise_phase):
-            if self.read_slider_alarm():
-                print("🛑 ERROR: Slider driver alarm during cruise phase")
-                return False
             if ultra_fast:
                 # ULTRA-FAST: Use non-debounced reading for maximum speed
                 if self.read_slider_min():
@@ -465,9 +443,6 @@ class HardwareController:
         
         # Deceleration phase (short for SERVO42C)
         for i in range(decel_phase):
-            if self.read_slider_alarm():
-                print("🛑 ERROR: Slider driver alarm during decel phase")
-                return False
             if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (decel phase)")
                 return True

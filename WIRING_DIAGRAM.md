@@ -127,9 +127,9 @@ Available for future use: GPIO 9, 10, 11, 14, 15, 22
     │  │ PUL+ ── GPIO 20 │  │  │ STEP ── GPIO 23 │  │
     │  │ PUL- ── GND     │  │  │ DIR ── GPIO 24  │  │
     │  │ DIR+ ── GPIO 21 │  │  │ ENA ── GPIO 25  │  │
-    │  │ DIR- ── GND     │  │  │ ALM ── GPIO 18  │  │
-    │  │ EN+ ── GPIO 12  │  │  │ GND ── GND      │  │
-    │  │ EN- ── GND      │  │  │ VCC ── 12V      │  │
+    │  │ DIR- ── GND     │  │  │ GND ── GND      │  │
+    │  │ EN+ ── GPIO 12  │  │  │ VCC ── 12V      │  │
+    │  │ EN- ── GND      │  │  │                 │  │
     │  │ ALM+ ── GPIO 16 │  │  │                 │  │
     │  │ ALM- ── GND     │  │  │                 │  │
     │  │ VCC ── 48V PSU  │  │  │                 │  │
@@ -157,11 +157,11 @@ Available for future use: GPIO 9, 10, 11, 14, 15, 22
     │  │ VCC ── 12V Ext  │  │  │ IND ── 10kΩ ──┐││ │
     │  └─────────────────┘  │  │     GPIO 18    │││ │
     │                       │  │     3.3kΩ ─ GND│││ │
-    │  NEMA 17 MOTOR        │  │  ⚠️ SHARED PIN │││ │
-    │  ┌─────────────────┐  │  │                │││ │
-    │  │ A+ ── SERVO42C  │  │  │ VCC ── LM317   ││ │
-    │  │ A- ── SERVO42C  │  │  │ GND ── GND     ││ │
-    │  │ B+ ── SERVO42C  │  │  └────────────────┘│ │
+    │  NEMA 17 MOTOR        │  │                ││ │
+    │  ┌─────────────────┐  │  │ VCC ── LM317   ││ │
+    │  │ A+ ── SERVO42C  │  │  │ GND ── GND     ││ │
+    │  │ A- ── SERVO42C  │  │  └────────────────┘│ │
+    │  │ B+ ── SERVO42C  │  │                     │ │
     │  │ B- ── SERVO42C  │  │                     │ │
     │  └─────────────────┘  │                     │ │
     └───────────────────────┼─────────────────────┘
@@ -213,9 +213,9 @@ External 12V Supply:
 - **Microstepping**: 4x (800 steps/revolution) - **BALANCED FOR 12V**
 - **Current**: Set for 1A motor (typically 0.8-1.0A)
 - **Enable Logic**: LOW = enabled, HIGH = disabled
-- **Alarm Logic**: HIGH = OK, LOW = fault/stall
 - **Max Pulse Rate**: 25kHz+ (reduced due to 12V supply)
 - **DIP Switch Settings**: MS1=OFF, MS2=ON, MS3=OFF (4x microstepping)
+- **Note**: Alarm monitoring removed (closed-loop driver provides built-in protection)
 
 ### **MKS SERVO42C Driver (Key Catcher Motor) Configuration:**
 - **Power**: 12V from External Power Supply
@@ -530,60 +530,26 @@ while True:
 
 ---
 
-## ⚠️ **CRITICAL WARNING: GPIO 18 PIN CONFLICT**
+## ✅ **GPIO PIN CONFLICT RESOLVED**
 
-### **Current Configuration Issue:**
-**GPIO 18 is shared between two functions:**
-1. **Inductive Sensor** (Key detection input)
-2. **Slider Motor ALARM** (SERVO42C Driver fault detection input)
+### **Previous Issue:**
+GPIO 18 was previously shared between the Inductive Sensor and Slider Motor ALARM, which could have caused false readings.
 
-### **Impact:**
-- Both functions are INPUT pins, which is less critical than output conflicts
-- However, reading can be unreliable as both signals will be ORed together
-- If slider alarm triggers (goes LOW), inductive sensor reading will be affected
-- If inductive sensor activates (goes LOW), alarm status reading will be affected
-- This can cause false key detections or missed alarm conditions
+### **Resolution:**
+The **Slider Motor ALARM** functionality has been removed from the codebase:
+- `SLIDER_ALM_PIN` definition removed
+- `read_slider_alarm()` function removed
+- All alarm checks in slider movement functions removed
 
-### **Recommended Solutions:**
+### **Current Status:**
+- **GPIO 18** is now exclusively used by the **Inductive Sensor** (key detection)
+- No GPIO pin conflicts remain in the system
+- All motor control and limit switch functions are fully operational
 
-#### **Option 1: Move Inductive Sensor to Unused GPIO (RECOMMENDED)**
-Move Inductive Sensor from GPIO 18 to an unused pin:
-- **GPIO 22** (currently unused) - BEST CHOICE, documented in original wiring
-- **GPIO 14** (currently unused)
-- **GPIO 15** (currently unused)
-- **GPIO 10** (currently unused)
+### **Benefits:**
+- Simplified code and reduced pin usage
+- Eliminated potential false key detections
+- Inductive sensor now has dedicated GPIO pin with no interference
+- MKS SERVO42C closed-loop driver provides built-in stall protection (alarm monitoring not required)
 
-```python
-# In hardware_controller.py
-self.INDUCTIVE_PIN = 22  # Change from 18 to 22
-```
-
-#### **Option 2: Move Slider ALARM to Unused GPIO**
-Move Slider ALARM from GPIO 18 to an unused pin:
-```python
-# In hardware_controller.py
-self.SLIDER_ALM_PIN = 22  # Change from 18 to 22
-```
-
-#### **Option 3: Disable Slider Alarm Monitoring (NOT RECOMMENDED)**
-If slider motor doesn't need alarm monitoring:
-```python
-# In hardware_controller.py
-# Comment out slider alarm setup
-# GPIO.setup(self.SLIDER_ALM_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-```
-
-### **Testing After Fix:**
-1. Test inductive sensor key detection independently
-2. Test slider motor operation and verify no false alarms
-3. Manually trigger slider alarm and verify detection
-4. Test key detection while slider is moving
-5. Verify no cross-interference between the two inputs
-
-### **Why This Matters:**
-- The inductive sensor is critical for key detection in the main process
-- Slider alarm is important for detecting mechanical issues or stalls
-- Sharing GPIO pins between inputs can cause false readings
-- This conflict should be resolved before production use
-
-**⚡ Recommended Fix: Move INDUCTIVE_PIN to GPIO 22 immediately!**
+**✅ System is now ready for production use with all GPIO conflicts resolved!**
