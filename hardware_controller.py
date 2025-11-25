@@ -72,12 +72,14 @@ class HardwareController:
         
         # Input pins (sensors and alarms)
         GPIO.setup(self.ALM_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        # Hall sensor - ⚠️ WARNING: Currently reading 5V (needs voltage divider!)
-        # Should have 10kΩ/6.8kΩ divider to drop 5V → 3.0V (safe for GPIO)
-        GPIO.setup(self.HALL_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        # Inductive sensor using internal pull-up (sensor output is floating when inactive)
-        # Needs external 4.7kΩ pull-up to 3.3V for reliable detection
-        GPIO.setup(self.INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        # Hall sensor with voltage divider (22kΩ + 3.3kΩ)
+        # Current readings: 1.2V (inactive) / 0.02V (active)
+        # 1.2V is borderline - using pull-down to help distinguish
+        GPIO.setup(self.HALL_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        # Inductive sensor with voltage divider (22kΩ + 3.3kΩ)
+        # Current readings: 1.2V (inactive) / 0.02V (active)
+        # 1.2V is borderline - using pull-down to help distinguish
+        GPIO.setup(self.INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
         
         # --- ADDED: Setup limit switch pins ---
         GPIO.setup(self.HOME_SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -248,10 +250,21 @@ class HardwareController:
         time.sleep(delay)
 
     def read_hall_sensor(self):
+        """Read Hall sensor through voltage divider.
+        
+        Current setup: 22kΩ + 3.3kΩ voltage divider
+        Voltages: 1.2V (inactive) / 0.02V (active)
+        
+        ⚠️ 1.2V is at GPIO threshold - may be unreliable!
+        For better reliability, use 22kΩ + 10kΩ to get ~2V inactive.
+        """
         return GPIO.input(self.HALL_PIN) == GPIO.LOW
 
     def read_inductive_sensor(self):
-        """Read inductive sensor using Pi's internal pull-up.
+        """Read inductive sensor through voltage divider.
+        
+        Current setup: 22kΩ + 3.3kΩ voltage divider
+        Voltages: 1.2V (inactive) / 0.02V (active)
         
         NPN NO sensor behavior:
         - No metal (inactive): Sensor output = OPEN CIRCUIT → Pull-up brings to 3.3V (HIGH)
