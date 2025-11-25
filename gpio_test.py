@@ -18,19 +18,24 @@ def test_gpio_basic():
         GPIO.setwarnings(False)
         print("✅ GPIO mode set to BCM")
         
-        # Test pins from hardware_controller.py
+        # Test pins from hardware_controller.py (CURRENT CONFIGURATION)
         test_pins = {
             'STEP_PIN': 20,
-            'DIR_PIN': 21, 
+            'DIR_PIN': 21,
+            'ENABLE_PIN': 12,
             'ALM_PIN': 16,
-            'HALL_PIN': 26,
+            'HALL_PIN': 27,
             'INDUCTIVE_PIN': 22,
-            'SLIDER_MIN_PIN': 27,
+            'SLIDER_MIN_PIN': 4,
             'SLIDER_MAX_PIN': 17,
             'SLIDER_STEP_PIN': 23,
             'SLIDER_DIR_PIN': 24,
-            'SLIDER_ALM_PIN': 18,
-            'PICO_TRIGGER_PIN': 4
+            'SLIDER_ENABLE_PIN': 25,
+            'KEY_CATCHER_STEP_PIN': 26,
+            'KEY_CATCHER_DIR_PIN': 19,
+            'KEY_CATCHER_ENABLE_PIN': 13,
+            'KEY_CATCHER_HOME_PIN': 5,
+            'KEY_CATCHER_MAX_PIN': 6
         }
         
         print("\n📌 Pin Configuration:")
@@ -49,11 +54,12 @@ def test_input_pins():
     
     input_pins = {
         'ALM_PIN': 16,
-        'HALL_PIN': 26,
+        'HALL_PIN': 27,
         'INDUCTIVE_PIN': 22,
-        'SLIDER_MIN_PIN': 27,
+        'SLIDER_MIN_PIN': 4,
         'SLIDER_MAX_PIN': 17,
-        'SLIDER_ALM_PIN': 18
+        'KEY_CATCHER_HOME_PIN': 5,
+        'KEY_CATCHER_MAX_PIN': 6
     }
     
     try:
@@ -81,9 +87,13 @@ def test_output_pins():
     output_pins = {
         'STEP_PIN': 20,
         'DIR_PIN': 21,
+        'ENABLE_PIN': 12,
         'SLIDER_STEP_PIN': 23,
         'SLIDER_DIR_PIN': 24,
-        'PICO_TRIGGER_PIN': 4
+        'SLIDER_ENABLE_PIN': 25,
+        'KEY_CATCHER_STEP_PIN': 26,
+        'KEY_CATCHER_DIR_PIN': 19,
+        'KEY_CATCHER_ENABLE_PIN': 13
     }
     
     try:
@@ -146,10 +156,9 @@ def test_sensor_reading():
     print("This will monitor sensors for 10 seconds. Trigger sensors manually to test.")
     
     try:
-        HALL_PIN = 26
+        HALL_PIN = 27
         INDUCTIVE_PIN = 22
         ALM_PIN = 16
-        SLIDER_ALM_PIN = 18
         
         print("Monitoring sensors for 10 seconds...")
         print("Press Ctrl+C to stop early")
@@ -159,12 +168,10 @@ def test_sensor_reading():
             hall_state = GPIO.input(HALL_PIN)
             inductive_state = GPIO.input(INDUCTIVE_PIN)
             alm_state = GPIO.input(ALM_PIN)
-            slider_alm_state = GPIO.input(SLIDER_ALM_PIN)
             
             print(f"\rHall: {'ACTIVE' if not hall_state else 'INACTIVE'} | "
                   f"Inductive: {'ACTIVE' if not inductive_state else 'INACTIVE'} | "
-                  f"Rotary Alarm: {'OK' if alm_state else 'STALL'} | "
-                  f"Slider Alarm: {'OK' if slider_alm_state else 'STALL'}", end='', flush=True)
+                  f"Rotary Alarm: {'OK' if alm_state else 'STALL'}    ", end='', flush=True)
             
             time.sleep(0.1)
         
@@ -178,31 +185,90 @@ def test_sensor_reading():
         print(f"\n❌ Sensor Test Error: {e}")
         return False
 
-def test_pico_trigger():
-    """Test Pico trigger functionality"""
-    print("\n📡 Testing Pico Trigger...")
+def test_inductive_sensor_detailed():
+    """Detailed test for inductive sensor on GPIO 22"""
+    print("\n🔍 DETAILED INDUCTIVE SENSOR TEST (GPIO 22)...")
     
     try:
-        PICO_TRIGGER_PIN = 4
+        INDUCTIVE_PIN = 22
         
-        # Setup trigger pin
-        GPIO.setup(PICO_TRIGGER_PIN, GPIO.OUT)
-        GPIO.output(PICO_TRIGGER_PIN, GPIO.LOW)
-        print(f"✅ Pico trigger pin (GPIO {PICO_TRIGGER_PIN}) configured")
+        # Setup with pull-up
+        GPIO.setup(INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        print(f"✅ Inductive sensor pin (GPIO {INDUCTIVE_PIN}) configured with pull-up")
         
-        print("\n🔄 Testing trigger pulses...")
-        for i in range(3):
-            print(f"  Sending trigger pulse {i+1}/3...")
-            GPIO.output(PICO_TRIGGER_PIN, GPIO.HIGH)
-            time.sleep(0.1)  # 100ms pulse
-            GPIO.output(PICO_TRIGGER_PIN, GPIO.LOW)
-            time.sleep(0.5)  # Wait between pulses
+        # Check initial state
+        initial_state = GPIO.input(INDUCTIVE_PIN)
+        print(f"📊 Initial state: {'HIGH (inactive)' if initial_state else 'LOW (active)'}")
         
-        print("✅ Pico trigger test complete")
+        # Alternative configurations to test
+        print("\n🔄 Testing different pull resistor configurations...")
+        
+        # Test with pull-down
+        GPIO.setup(INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        time.sleep(0.1)
+        pulldown_state = GPIO.input(INDUCTIVE_PIN)
+        print(f"  With PULL-DOWN: {'HIGH' if pulldown_state else 'LOW'}")
+        
+        # Test with no pull resistor
+        GPIO.setup(INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
+        time.sleep(0.1)
+        float_state = GPIO.input(INDUCTIVE_PIN)
+        print(f"  With NO PULL (floating): {'HIGH' if float_state else 'LOW'}")
+        
+        # Reset to pull-up (standard configuration)
+        GPIO.setup(INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        time.sleep(0.1)
+        
+        print("\n👁️ Monitoring inductive sensor for 15 seconds...")
+        print("   Bring a metal object within 4mm to test detection")
+        print("   Press Ctrl+C to stop early\n")
+        
+        last_state = None
+        trigger_count = 0
+        start_time = time.time()
+        
+        while time.time() - start_time < 15:
+            current_state = GPIO.input(INDUCTIVE_PIN)
+            
+            # Detect state changes
+            if last_state is not None and current_state != last_state:
+                trigger_count += 1
+                if not current_state:  # Went LOW (active)
+                    print(f"✨ DETECTED! Metal object detected at {time.time() - start_time:.2f}s")
+                else:  # Went HIGH (inactive)
+                    print(f"   Released at {time.time() - start_time:.2f}s")
+            
+            last_state = current_state
+            
+            # Display status
+            status = "🟢 ACTIVE (detecting)" if not current_state else "⚪ INACTIVE"
+            elapsed = int(time.time() - start_time)
+            print(f"\r{status} | Time: {elapsed}s | Triggers: {trigger_count}  ", end='', flush=True)
+            
+            time.sleep(0.05)  # 50ms sampling
+        
+        print(f"\n\n📊 Test Results:")
+        print(f"   Total triggers detected: {trigger_count}")
+        print(f"   Final state: {'ACTIVE (LOW)' if not current_state else 'INACTIVE (HIGH)'}")
+        
+        if trigger_count == 0:
+            print("\n⚠️ WARNING: No triggers detected!")
+            print("   Possible issues:")
+            print("   1. Sensor not powered (check 12V supply)")
+            print("   2. Wrong wiring (check signal wire to GPIO 22)")
+            print("   3. Voltage divider issue (should be 10kΩ + 3.3kΩ)")
+            print("   4. Defective sensor")
+            print("   5. Metal object too far (must be within 4mm)")
+        else:
+            print("✅ Sensor is working!")
+        
+        return trigger_count > 0
+        
+    except KeyboardInterrupt:
+        print("\n⏹️ Inductive sensor test stopped by user")
         return True
-        
     except Exception as e:
-        print(f"❌ Pico Trigger Test Error: {e}")
+        print(f"\n❌ Inductive Sensor Test Error: {e}")
         return False
 
 def main():
@@ -218,7 +284,7 @@ def main():
             ("Output Pins", test_output_pins),
             ("Motor Steps", test_motor_step_sequence),
             ("Sensor Reading", test_sensor_reading),
-            ("Pico Trigger", test_pico_trigger)
+            ("Inductive Sensor (Detailed)", test_inductive_sensor_detailed)
         ]
         
         results = []
@@ -247,7 +313,13 @@ def main():
         print("3. If output pins don't toggle: Check wiring to motor drivers")
         print("4. If motor doesn't move: Check power supply and driver connections")
         print("5. If sensors don't respond: Check sensor wiring and power")
-        print("6. For OMC closed-loop stepper: Verify differential signal wiring")
+        print("6. For inductive sensor (GPIO 22):")
+        print("   - Check 12V power supply to sensor")
+        print("   - Verify voltage divider: 10kΩ (sensor → GPIO) + 3.3kΩ (GPIO → GND)")
+        print("   - Metal object must be within 4mm of sensor")
+        print("   - Sensor output should be 12V (NPN NO type)")
+        print("7. For CL57T closed-loop stepper: Verify differential signal wiring")
+        print("8. For MKS SERVO42C drivers: Check 12V power and 4x microstepping")
         
     except Exception as e:
         print(f"❌ Diagnostic failed: {e}")

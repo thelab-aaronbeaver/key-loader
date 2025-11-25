@@ -155,7 +155,7 @@ Available for future use: GPIO 9, 10, 11, 14, 15, 18
     │  │ ENA ── GPIO 13  │  │  │     3.3kΩ ─ GND ││ │
     │  │ GND ── GND      │  │  │                 ││ │
     │  │ VCC ── 12V Ext  │  │  │ IND ── 10kΩ ──┐││ │
-    │  └─────────────────┘  │  │     GPIO 18    │││ │
+    │  └─────────────────┘  │  │     GPIO 22    │││ │
     │                       │  │     3.3kΩ ─ GND│││ │
     │  NEMA 17 MOTOR        │  │                ││ │
     │  ┌─────────────────┐  │  │ VCC ── LM317   ││ │
@@ -536,13 +536,20 @@ while True:
 GPIO 18 was previously shared between the Inductive Sensor and Slider Motor ALARM, which could have caused false readings.
 
 ### **Resolution:**
-The **Slider Motor ALARM** functionality has been removed from the codebase:
-- `SLIDER_ALM_PIN` definition removed
-- `read_slider_alarm()` function removed
-- All alarm checks in slider movement functions removed
+Two changes were made to resolve GPIO conflicts:
+1. **Slider Motor ALARM** functionality removed from the codebase:
+   - `SLIDER_ALM_PIN` definition removed
+   - `read_slider_alarm()` function removed
+   - All alarm checks in slider movement functions removed
+
+2. **Inductive Sensor** moved from GPIO 18 to GPIO 22:
+   - GPIO 18 was causing issues with the inductive sensor
+   - GPIO 22 is now used (original pin assignment)
+   - GPIO 18 is now available for future use
 
 ### **Current Status:**
-- **GPIO 18** is now exclusively used by the **Inductive Sensor** (key detection)
+- **GPIO 22** is now used for **Inductive Sensor** (key detection)
+- **GPIO 18** is available for future expansion
 - No GPIO pin conflicts remain in the system
 - All motor control and limit switch functions are fully operational
 
