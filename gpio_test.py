@@ -192,9 +192,10 @@ def test_inductive_sensor_detailed():
     try:
         INDUCTIVE_PIN = 22
         
-        # Setup with pull-down (due to weak voltage levels: 0.7V/0.3V)
-        GPIO.setup(INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-        print(f"✅ Inductive sensor pin (GPIO {INDUCTIVE_PIN}) configured with pull-down")
+        # Setup with pull-up (sensor output is floating/open when inactive)
+        GPIO.setup(INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        print(f"✅ Inductive sensor pin (GPIO {INDUCTIVE_PIN}) configured with internal pull-up")
+        print(f"   This pulls floating sensor output to 3.3V when inactive")
         
         # Check initial state
         initial_state = GPIO.input(INDUCTIVE_PIN)
@@ -256,17 +257,20 @@ def test_inductive_sensor_detailed():
             print("   Possible issues:")
             print("   1. Sensor not powered (check 12V supply)")
             print("   2. Wrong wiring (check signal wire to GPIO 22)")
-            print("   3. Voltage divider issue (should be 10kΩ + 3.3kΩ)")
+            print("   3. Sensor output is floating (needs pull-up resistor)")
             print("   4. Defective sensor")
             print("   5. Metal object too far (must be within 4mm)")
-            print("\n   📊 Your reported voltages: 0.7V (idle) / 0.3V (active)")
-            print("   These are TOO LOW! See inductive_sensor_fix.md for solutions.")
-            print("   Quick fix: Add 10kΩ pull-up from sensor output to +12V")
+            print("\n   📊 Your reported external voltages: 0.3V (idle) / 0.025V (active)")
+            print("   Both are LOW - can't distinguish without pull-up!")
+            print("   Internal pull-up should fix this temporarily.")
+            print("   For production: Add 10kΩ pull-up from sensor output to +12V")
         else:
-            print("✅ Sensor is detecting!")
-            print("   Note: Voltage levels (0.7V/0.3V) are borderline.")
-            print("   For better reliability, add 10kΩ pull-up to +12V")
-            print("   See inductive_sensor_fix.md for details")
+            print("✅ Sensor is detecting with internal pull-up!")
+            print("   External voltages: 0.3V (idle) / 0.025V (active)")
+            print("   Internal pull-up brings idle state to 3.3V for reliable detection.")
+            print("\n   💡 For better reliability in production:")
+            print("   Add external 10kΩ pull-up from sensor output to +12V")
+            print("   See inductive_sensor_fix.md for wiring diagram")
         
         return trigger_count > 0
         

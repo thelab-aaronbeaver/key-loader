@@ -73,8 +73,10 @@ class HardwareController:
         # Input pins (sensors and alarms)
         GPIO.setup(self.ALM_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.HALL_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        # Inductive sensor using pull-down due to weak voltage levels (0.7V/0.3V)
-        GPIO.setup(self.INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        # Inductive sensor using internal pull-up (sensor output is floating when inactive)
+        # Current voltages: 0.3V (no metal) / 0.025V (metal) - both too low!
+        # Internal pull-up will bring idle state to 3.3V for reliable detection
+        GPIO.setup(self.INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         
         # --- ADDED: Setup limit switch pins ---
         GPIO.setup(self.HOME_SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -248,17 +250,21 @@ class HardwareController:
         return GPIO.input(self.HALL_PIN) == GPIO.LOW
 
     def read_inductive_sensor(self):
-        """Read inductive sensor with weak voltage levels.
+        """Read inductive sensor using Pi's internal pull-up.
         
-        Current setup: 0.7V (no metal) / 0.3V (metal detected)
-        - 0.7V is just above GPIO threshold (~0.5-0.8V) - may read as HIGH
-        - 0.3V is below threshold - reads as LOW reliably
+        NPN NO sensor behavior:
+        - No metal (inactive): Sensor output = OPEN CIRCUIT → Pull-up brings to 3.3V (HIGH)
+        - Metal detected (active): Sensor output = GND → Pin reads 0V (LOW)
         
-        Using pull-down to help stabilize the reading.
+        Current external voltages without pull-up: 0.3V (idle) / 0.025V (active)
+        Both read as LOW, can't distinguish! Internal pull-up fixes this.
         
-        ⚠️ IMPORTANT: Proper hardware fix needed!
-           Add 10kΩ pull-up resistor from sensor output to +12V
-           See inductive_sensor_fix.md for details
+        With internal pull-up:
+        - No metal: Pin pulled HIGH to 3.3V
+        - Metal detected: Sensor pulls to GND (LOW)
+        
+        ⚠️ NOTE: For better reliability, add external 10kΩ pull-up to +12V
+           See inductive_sensor_fix.md for proper wiring
         """
         return GPIO.input(self.INDUCTIVE_PIN) == GPIO.LOW
 

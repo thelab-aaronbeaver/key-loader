@@ -1,15 +1,38 @@
 # Inductive Sensor Voltage Fix Guide
 
-## 🔍 Your Current Problem:
-- **No metal**: 0.7V (too low, should be ~3.0V)
-- **Metal detected**: 0.3V (acceptable LOW, but should be closer to 0V)
+## ⚡ QUICK TEMPORARY FIX (Software Only):
+
+**Current Status:** Code now uses Pi's internal pull-up resistor.
+
+This will work temporarily:
+- **No metal**: Internal pull-up brings GPIO to 3.3V (HIGH)
+- **Metal detected**: Sensor pulls GPIO to GND/0V (LOW)
+
+**Test it now:**
+```bash
+sudo python3 gpio_test.py
+```
+
+The sensor should work! But for production reliability, add an external pull-up (see below).
+
+---
+
+## 🔍 Your Current Problem (Hardware):
+- **No metal**: 0.3V (way too low!)
+- **Metal detected**: 0.025V (good, basically 0V/GND)
 
 ## ⚡ Root Cause:
-Your voltage divider circuit isn't working correctly. The LJ12A3-4-Z/BX sensor outputs:
-- **Active (metal detected)**: ~0V (connects to GND)
-- **Inactive (no metal)**: OPEN CIRCUIT (not 12V!)
+**Both voltages read as LOW on the GPIO!** You can't distinguish between states.
 
-**NPN NO (Normally Open)** sensors need a **pull-up resistor** to 12V, not just a voltage divider!
+The LJ12A3-4-Z/BX is an **NPN NO (Normally Open)** sensor, which means:
+- **Active (metal detected)**: Output connects to GND → ~0V ✅ (working correctly!)
+- **Inactive (no metal)**: Output is **OPEN CIRCUIT** (floating) → Leaking 0.3V ❌
+
+**The sensor output NEVER provides voltage!** It only:
+1. **Floats** (open circuit) when inactive
+2. **Connects to GND** when active
+
+You **MUST** add a pull-up resistor to bring the floating state to a HIGH voltage!
 
 ---
 
@@ -42,29 +65,38 @@ Your voltage divider circuit isn't working correctly. The LJ12A3-4-Z/BX sensor o
 
 ---
 
-## ✅ SOLUTION 2: Simplified Circuit (EASIER)
+## ✅ SOLUTION 2: Pi Internal Pull-up (CURRENT - TEMPORARY)
 
-If you don't want to add a pull-up to 12V, use the Pi's internal pull-up:
+**This is what the code is using now!**
 
 ### Circuit:
 ```
-    SENSOR OUTPUT ───┬─── GPIO 22 (with internal pull-up)
-                     │
-                    GND
+    SENSOR OUTPUT (black) ─── GPIO 22 (with internal pull-up to 3.3V)
+                         
+    SENSOR POWER (brown) ─── +12V
+    SENSOR GND (blue) ─────── GND
 ```
 
-### Configuration:
-- **Remove voltage divider completely**
-- Connect sensor output directly to GPIO 22
-- Sensor brown wire → 12V
-- Sensor blue wire → GND  
-- Sensor black wire → GPIO 22
-- Use Pi's internal pull-up resistor
+### How It Works:
+- **Remove any voltage divider** between sensor and GPIO 22
+- Connect sensor output (black wire) **directly** to GPIO 22
+- Pi's internal ~50kΩ pull-up brings pin to 3.3V when sensor is floating
+- When sensor detects metal, it pulls pin to GND
 
-### Trade-off:
-- ⚠️ **DANGER**: If sensor malfunctions and outputs 12V, it will **DESTROY the Pi!**
-- Only safe because NPN NO sensors NEVER output voltage, only GND
-- Pi's internal pull-up (to 3.3V) will keep pin HIGH when inactive
+### Current Behavior:
+- **No metal**: Sensor floating (0.3V external) → Internal pull-up makes GPIO read 3.3V (HIGH)
+- **Metal**: Sensor connects to GND (0.025V) → GPIO reads 0V (LOW)
+
+### Trade-offs:
+- ✅ **Works immediately** with no hardware changes
+- ✅ **Safe** - NPN NO sensors never output voltage, only connect to GND
+- ⚠️ **Weak pull-up** - 50kΩ internal resistor may pick up noise
+- ⚠️ **Not production-grade** - Better to use external pull-up
+
+### When to Use:
+- Testing/debugging
+- Temporary operation while waiting for parts
+- Low-noise environments
 
 ---
 
