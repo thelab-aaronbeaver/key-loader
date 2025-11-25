@@ -72,10 +72,11 @@ class HardwareController:
         
         # Input pins (sensors and alarms)
         GPIO.setup(self.ALM_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        # Hall sensor - ⚠️ WARNING: Currently reading 5V (needs voltage divider!)
+        # Should have 10kΩ/6.8kΩ divider to drop 5V → 3.0V (safe for GPIO)
         GPIO.setup(self.HALL_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         # Inductive sensor using internal pull-up (sensor output is floating when inactive)
-        # Current voltages: 0.3V (no metal) / 0.025V (metal) - both too low!
-        # Internal pull-up will bring idle state to 3.3V for reliable detection
+        # Needs external 4.7kΩ pull-up to 3.3V for reliable detection
         GPIO.setup(self.INDUCTIVE_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         
         # --- ADDED: Setup limit switch pins ---

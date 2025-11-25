@@ -244,18 +244,35 @@ Components powered:
 └── Limit Switches (896F)
 ```
 
-### **Sensor Signal Level Conversion (CRITICAL):**
-```
-⚠️  WARNING: Sensors output 12-24V, Pi GPIO max is 3.3V!
+### **Sensor Signal Level Conversion:**
 
-Voltage Divider Circuit (for each sensor):
-Sensor Output (12-24V) ──┬── 10kΩ ──┬── GPIO Pin (3.3V)
-                         │          │
-                         └── 3.3kΩ ──┴── GND
+#### **Hall Sensor (NJK-5002C):**
+```
+Hall sensor output (12V active) needs voltage divider:
+
+Sensor Output (12V) ──┬── 10kΩ ──┬── GPIO 27 (3.0V)
+                      │          │
+                      └── 3.3kΩ ──┴── GND
+```
+
+#### **Inductive Sensor (LJ12A3-4-Z/BX) - NPN NO Type:**
+```
+⚠️ CRITICAL: NPN NO sensors need pull-up resistor!
+
+RECOMMENDED WIRING (Safe for Pi):
+Pi 3.3V ──── 4.7kΩ ────┬──── Sensor Output (black) ──── GPIO 22
+                       │
+                      GND
+
+How it works:
+- No metal: 4.7kΩ pulls GPIO to 3.3V (HIGH)
+- Metal detected: Sensor's 300Ω internal resistor pulls to GND
+  → Creates voltage divider: 3.3V × (300/5000) = 0.2V (LOW)
 
 Components needed:
-├── 2x 10kΩ resistors (for Hall & Inductive sensors)
-├── 2x 3.3kΩ resistors (for Hall & Inductive sensors)
+├── 1x 4.7kΩ resistor (pull-up for inductive sensor)
+├── 1x 10kΩ resistor (for Hall sensor voltage divider)
+├── 1x 3.3kΩ resistor (for Hall sensor voltage divider)
 └── 2x 0.1μF capacitors (optional - noise filtering)
 ```
 
