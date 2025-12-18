@@ -438,6 +438,25 @@ def run_cycle_background(total_cycles):
             })
             return
         
+        # Home key catcher to start position
+        if config.get('key_catcher_enabled', True):
+            safe_set_app_state("system_message", "Homing key catcher to start position...")
+            emit_status_update()
+            
+            key_catcher_speed = config.get('key_catcher_speed', 80)
+            home_ok = hw.key_catcher_home(speed=key_catcher_speed, max_steps=8000)
+            
+            if not home_ok:
+                safe_update_app_state({
+                    "system_message": "ERROR: Key catcher failed to reach HOME limit switch at start.",
+                    "is_running": False
+                })
+                return
+            
+            # Reset key counter for this cycle
+            hw.key_catcher_reset_key_count()
+            safe_set_app_state("key_catcher_keys_since_reset", 0)
+        
         safe_set_app_state("system_message", "Start state complete. Beginning key detection cycle...")
 
         # --- UPDATED: Key-driven cycle loop ---
