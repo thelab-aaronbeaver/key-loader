@@ -25,11 +25,12 @@ class HardwareController:
         self.SLIDER_DIR_PIN = 24
         self.SLIDER_ENABLE_PIN = 25  # Enable pin for slider motor (ENA)
         
-        # --- SERVO42C Configuration (12V Supply) ---
-        # SERVO42C with 12V supply - balanced performance
-        # Recommended: 4x microstepping (800 pulses/rev) for 12V operation
-        self.SLIDER_PULSES_PER_REV = 800  # 4x microstepping (optimized for 12V)
-        self.SLIDER_MAX_PULSE_RATE = 25000  # SERVO42C with 12V can handle 25kHz+
+        # --- SERVO42C Configuration ---
+        # SERVO42C rated maximum speed: 1000 RPM.
+        # With 4x microstepping (800 pulses/rev), 100% speed maps to 13,333 pulses/sec.
+        self.SLIDER_PULSES_PER_REV = 800
+        self.SLIDER_MAX_RPM = 1000
+        self.SLIDER_MAX_PULSE_RATE = int((self.SLIDER_MAX_RPM * self.SLIDER_PULSES_PER_REV) / 60)
         
         # --- ADDED: Slider motor limit switches ---
         # NOTE: Adjust these BCM pins to match wiring for the slider rail.
@@ -45,10 +46,10 @@ class HardwareController:
         self.KEY_CATCHER_HOME_PIN = 18   # Home position limit switch
         self.KEY_CATCHER_MAX_PIN = 6    # Max/pause/stop position limit switch
 
-        # --- Key Catcher Configuration (12V Supply) ---
-        # SERVO42C with 12V supply - same as slider motor
-        self.KEY_CATCHER_PULSES_PER_REV = 800  # 4x microstepping (optimized for 12V)
-        self.KEY_CATCHER_MAX_PULSE_RATE = 25000  # SERVO42C with 12V can handle 25kHz+
+        # --- Key Catcher Configuration ---
+        self.KEY_CATCHER_PULSES_PER_REV = 800
+        self.KEY_CATCHER_MAX_RPM = 1000
+        self.KEY_CATCHER_MAX_PULSE_RATE = int((self.KEY_CATCHER_MAX_RPM * self.KEY_CATCHER_PULSES_PER_REV) / 60)
         
         # Key catcher position tracking
         self.key_catcher_current_position = 0  # Current position in steps
@@ -234,7 +235,7 @@ class HardwareController:
         # Optimized for CL57T driver - 300 RPM maximum
         return max(0.00000625, 0.000625 / (speed / 100.0))
     
-    def _servo42c_speed_to_delay(self, speed, max_pulse_rate, min_delay=0.00004):
+    def _servo42c_speed_to_delay(self, speed, max_pulse_rate, min_delay=0.00002):
         """Convert 0-100 speed to half-period delay using configured max pulse rate."""
         if speed <= 0:
            return 0.01  # Very slow if stopped

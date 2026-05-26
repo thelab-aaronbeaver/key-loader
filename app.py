@@ -55,8 +55,8 @@ def load_config():
     default_config = {
         "step_degrees": 36.0,
         "pause_seconds": 1.0,       # time to hold at position (seconds)
-        "slider_in_speed": 80,      # 0-100 speed scale (0=stopped, 100=750 RPM) - SERVO42C 12V OPTIMIZED
-        "slider_out_speed": 80,     # 0-100 speed scale (0=stopped, 100=750 RPM) - SERVO42C 12V OPTIMIZED
+        "slider_in_speed": 80,      # 0-100 speed scale (0=stopped, 100=SERVO42C max rated RPM)
+        "slider_out_speed": 80,     # 0-100 speed scale (0=stopped, 100=SERVO42C max rated RPM)
         "slider_accel_steps": 15,   # steps for slider acceleration ramp-up - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
         "slider_decel_steps": 15,   # steps for slider deceleration ramp-down - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
         "rotary_speed": 100,        # 0-100 speed scale for rotary motor - MAXIMUM SPEED
@@ -320,9 +320,9 @@ def api_set_config():
         if 'pause_seconds' in data:
             config['pause_seconds'] = float(data['pause_seconds'])
         if 'slider_in_speed' in data:
-            config['slider_in_speed'] = max(0, min(100, int(data['slider_in_speed'])))  # allow up to 100 for 750 RPM maximum
+            config['slider_in_speed'] = max(0, min(100, int(data['slider_in_speed'])))  # allow up to 100 (mapped to motor max RPM)
         if 'slider_out_speed' in data:
-            config['slider_out_speed'] = max(0, min(100, int(data['slider_out_speed'])))  # allow up to 100 for 750 RPM maximum
+            config['slider_out_speed'] = max(0, min(100, int(data['slider_out_speed'])))  # allow up to 100 (mapped to motor max RPM)
         if 'slider_accel_steps' in data:
             config['slider_accel_steps'] = max(1, int(data['slider_accel_steps']))  # minimum 1 step
         if 'slider_decel_steps' in data:
