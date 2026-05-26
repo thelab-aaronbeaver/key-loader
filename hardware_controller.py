@@ -234,13 +234,13 @@ class HardwareController:
         # Optimized for CL57T driver - 300 RPM maximum
         return max(0.00000625, 0.000625 / (speed / 100.0))
     
-    def _servo42c_speed_to_delay(self, speed):
-        """Convert 0-100 speed to delay for SERVO42C (750 RPM maximum)."""
+    def _servo42c_speed_to_delay(self, speed, max_pulse_rate, min_delay=0.00004):
+        """Convert 0-100 speed to half-period delay using configured max pulse rate."""
         if speed <= 0:
-           return 0.0001  # Very slow if stopped
-        # SERVO42C optimized for 750 RPM maximum
-        # 100 = 0.0001s (0.1ms) = 750 RPM, 50 = 0.0002s (0.2ms) = 375 RPM
-        return max(0.00001, 0.001 / (speed / 100.0))
+           return 0.01  # Very slow if stopped
+        pulse_rate = max_pulse_rate * (speed / 100.0)  # pulses per second
+        # Keep a practical floor for Python timing + motor torque at startup.
+        return max(min_delay, 1.0 / (2.0 * pulse_rate))
     
     def _step_motor(self, delay):
         """Single step with given delay."""
@@ -348,7 +348,7 @@ class HardwareController:
             time.sleep(0.1)  # Skip delay in ultra-fast mode
         
         # Convert speed to SERVO42C-optimized delay
-        speed_delay = self._servo42c_speed_to_delay(speed)
+        speed_delay = self._servo42c_speed_to_delay(speed, self.SLIDER_MAX_PULSE_RATE)
         
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.HIGH)
         print(f"Moving slider to MAX: speed={speed}, delay={speed_delay:.6f}s, max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
@@ -369,12 +369,14 @@ class HardwareController:
         step_count = 0
         
         # Acceleration phase (short for SERVO42C)
+        ramp_start_multiplier = 4.0 if speed_delay <= 0.00005 else 2.0
         for i in range(accel_phase):
             if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (accel phase)")
                 return True
             # Gradually decrease delay (increase speed)
-            delay = speed_delay * (1.0 + (accel_phase - i) / accel_phase)
+            progress = (accel_phase - i) / accel_phase
+            delay = speed_delay * (1.0 + (ramp_start_multiplier - 1.0) * progress)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
@@ -405,7 +407,8 @@ class HardwareController:
                 print(f"MAX switch triggered at step {step_count} (decel phase)")
                 return True
             # Gradually increase delay (decrease speed)
-            delay = speed_delay * (1.0 + (i + 1) / decel_phase)
+            progress = (i + 1) / decel_phase
+            delay = speed_delay * (1.0 + (ramp_start_multiplier - 1.0) * progress)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
@@ -423,7 +426,7 @@ class HardwareController:
             time.sleep(0.1)  # Skip delay in ultra-fast mode
         
         # Convert speed to SERVO42C-optimized delay
-        speed_delay = self._servo42c_speed_to_delay(speed)
+        speed_delay = self._servo42c_speed_to_delay(speed, self.SLIDER_MAX_PULSE_RATE)
         
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.LOW)
         print(f"Moving slider to MIN: speed={speed}, delay={speed_delay:.6f}s, max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
@@ -444,12 +447,14 @@ class HardwareController:
         step_count = 0
         
         # Acceleration phase (short for SERVO42C)
+        ramp_start_multiplier = 4.0 if speed_delay <= 0.00005 else 2.0
         for i in range(accel_phase):
             if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (accel phase)")
                 return True
             # Gradually decrease delay (increase speed)
-            delay = speed_delay * (1.0 + (accel_phase - i) / accel_phase)
+            progress = (accel_phase - i) / accel_phase
+            delay = speed_delay * (1.0 + (ramp_start_multiplier - 1.0) * progress)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
@@ -480,7 +485,8 @@ class HardwareController:
                 print(f"MIN switch triggered at step {step_count} (decel phase)")
                 return True
             # Gradually increase delay (decrease speed)
-            delay = speed_delay * (1.0 + (i + 1) / decel_phase)
+            progress = (i + 1) / decel_phase
+            delay = speed_delay * (1.0 + (ramp_start_multiplier - 1.0) * progress)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
@@ -512,7 +518,7 @@ class HardwareController:
         GPIO.output(self.KEY_CATCHER_DIR_PIN, GPIO.LOW)
         
         # Convert speed to delay
-        speed_delay = self._servo42c_speed_to_delay(speed)
+        speed_delay = self._servo42c_speed_to_delay(speed, self.KEY_CATCHER_MAX_PULSE_RATE)
         
         # Move until HOME switch is triggered or max steps reached
         for step in range(max_steps):
@@ -558,7 +564,7 @@ class HardwareController:
         GPIO.output(self.KEY_CATCHER_DIR_PIN, GPIO.HIGH if direction > 0 else GPIO.LOW)
         
         # Convert speed to delay using SERVO42C speed calculation
-        speed_delay = self._servo42c_speed_to_delay(speed)
+        speed_delay = self._servo42c_speed_to_delay(speed, self.KEY_CATCHER_MAX_PULSE_RATE)
         
         print(f"Key catcher moving {steps} steps ({'forward' if direction > 0 else 'reverse'}) at speed {speed}")
         
@@ -708,7 +714,7 @@ class HardwareController:
         GPIO.output(self.KEY_CATCHER_DIR_PIN, GPIO.HIGH)
         
         # Convert speed to delay
-        speed_delay = self._servo42c_speed_to_delay(speed)
+        speed_delay = self._servo42c_speed_to_delay(speed, self.KEY_CATCHER_MAX_PULSE_RATE)
         
         # Move until MAX switch is triggered
         max_steps = 8000  # Safety limit
