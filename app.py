@@ -1353,9 +1353,10 @@ def api_key_catcher_test_cycle():
     
     try:
         speed = config.get('key_catcher_speed', 80)
+        pause_position = config.get('key_catcher_pause_position', 4000)
         
         # Run the test cycle
-        results = hw.key_catcher_test_cycle(speed=speed)
+        results = hw.key_catcher_test_cycle(speed=speed, pause_position=pause_position)
         
         # Build message from results
         message = " | ".join(results["messages"])
