@@ -225,6 +225,65 @@ class HardwareController:
             # Keep motor enabled for position holding (optional - can disable if desired)
             # self.enable_rotary_motor(False)
             pass
+
+    def rotary_dir_test(self, cycles=4, settle_ms=5, hold_ms=250):
+        """
+        Toggle rotary DIR pin and report readback timing.
+
+        Args:
+            cycles: Number of toggles to perform
+            settle_ms: Wait time after each DIR write before settled readback
+            hold_ms: Additional hold time per state for probing with a meter/scope
+
+        Returns:
+            dict: Direction toggle/readback timing details
+        """
+        cycles = max(1, int(cycles))
+        settle_s = max(0.0, float(settle_ms) / 1000.0)
+        hold_s = max(0.0, float(hold_ms) / 1000.0)
+
+        # Ensure output is actively driven during test.
+        self.enable_rotary_motor(True)
+        time.sleep(0.05)
+
+        initial_read = int(GPIO.input(self.DIR_PIN))
+        target_state = GPIO.LOW if initial_read == GPIO.HIGH else GPIO.HIGH
+        transitions = []
+
+        for idx in range(cycles):
+            t0 = time.perf_counter()
+            GPIO.output(self.DIR_PIN, target_state)
+            t1 = time.perf_counter()
+            immediate_read = int(GPIO.input(self.DIR_PIN))
+            time.sleep(settle_s)
+            t2 = time.perf_counter()
+            settled_read = int(GPIO.input(self.DIR_PIN))
+            if hold_s > 0:
+                time.sleep(hold_s)
+            t3 = time.perf_counter()
+
+            transitions.append({
+                "index": idx + 1,
+                "target": "HIGH" if target_state == GPIO.HIGH else "LOW",
+                "target_value": int(target_state),
+                "read_immediate": immediate_read,
+                "read_settled": settled_read,
+                "write_overhead_ms": (t1 - t0) * 1000.0,
+                "settle_wait_ms": (t2 - t1) * 1000.0,
+                "hold_wait_ms": (t3 - t2) * 1000.0
+            })
+
+            target_state = GPIO.LOW if target_state == GPIO.HIGH else GPIO.HIGH
+
+        return {
+            "success": True,
+            "pin": self.DIR_PIN,
+            "initial_read": initial_read,
+            "cycles": cycles,
+            "settle_ms_requested": float(settle_ms),
+            "hold_ms_requested": float(hold_ms),
+            "transitions": transitions
+        }
     
     def _speed_to_delay(self, speed):
         """Convert 0-100 speed to delay in seconds for rotary motor (300 RPM maximum)."""
@@ -234,13 +293,13 @@ class HardwareController:
         # Optimized for CL57T driver - 300 RPM maximum
         return max(0.00000625, 0.000625 / (speed / 100.0))
     
-    def _servo42c_speed_to_delay(self, speed):
-        """Convert 0-100 speed to delay for SERVO42C (750 RPM maximum)."""
+    def _servo42c_speed_to_delay(self, speed, max_pulse_rate, min_delay=0.00004):
+        """Convert 0-100 speed to half-period delay using configured max pulse rate."""
         if speed <= 0:
-           return 0.0001  # Very slow if stopped
-        # SERVO42C optimized for 750 RPM maximum
-        # 100 = 0.0001s (0.1ms) = 750 RPM, 50 = 0.0002s (0.2ms) = 375 RPM
-        return max(0.00001, 0.001 / (speed / 100.0))
+           return 0.01  # Very slow if stopped
+        pulse_rate = max_pulse_rate * (speed / 100.0)  # pulses per second
+        # Keep a practical floor for Python timing + motor torque at startup.
+        return max(min_delay, 1.0 / (2.0 * pulse_rate))
     
     def _step_motor(self, delay):
         """Single step with given delay."""
@@ -348,7 +407,7 @@ class HardwareController:
             time.sleep(0.1)  # Skip delay in ultra-fast mode
         
         # Convert speed to SERVO42C-optimized delay
-        speed_delay = self._servo42c_speed_to_delay(speed)
+        speed_delay = self._servo42c_speed_to_delay(speed, self.SLIDER_MAX_PULSE_RATE)
         
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.HIGH)
         print(f"Moving slider to MAX: speed={speed}, delay={speed_delay:.6f}s, max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
@@ -369,12 +428,14 @@ class HardwareController:
         step_count = 0
         
         # Acceleration phase (short for SERVO42C)
+        ramp_start_multiplier = 4.0 if speed_delay <= 0.00005 else 2.0
         for i in range(accel_phase):
             if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (accel phase)")
                 return True
             # Gradually decrease delay (increase speed)
-            delay = speed_delay * (1.0 + (accel_phase - i) / accel_phase)
+            progress = (accel_phase - i) / accel_phase
+            delay = speed_delay * (1.0 + (ramp_start_multiplier - 1.0) * progress)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
@@ -405,7 +466,8 @@ class HardwareController:
                 print(f"MAX switch triggered at step {step_count} (decel phase)")
                 return True
             # Gradually increase delay (decrease speed)
-            delay = speed_delay * (1.0 + (i + 1) / decel_phase)
+            progress = (i + 1) / decel_phase
+            delay = speed_delay * (1.0 + (ramp_start_multiplier - 1.0) * progress)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
@@ -423,7 +485,7 @@ class HardwareController:
             time.sleep(0.1)  # Skip delay in ultra-fast mode
         
         # Convert speed to SERVO42C-optimized delay
-        speed_delay = self._servo42c_speed_to_delay(speed)
+        speed_delay = self._servo42c_speed_to_delay(speed, self.SLIDER_MAX_PULSE_RATE)
         
         GPIO.output(self.SLIDER_DIR_PIN, GPIO.LOW)
         print(f"Moving slider to MIN: speed={speed}, delay={speed_delay:.6f}s, max_pulses={max_pulses}, accel={accel_steps}, decel={decel_steps}, ultra_fast={ultra_fast}")
@@ -444,12 +506,14 @@ class HardwareController:
         step_count = 0
         
         # Acceleration phase (short for SERVO42C)
+        ramp_start_multiplier = 4.0 if speed_delay <= 0.00005 else 2.0
         for i in range(accel_phase):
             if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (accel phase)")
                 return True
             # Gradually decrease delay (increase speed)
-            delay = speed_delay * (1.0 + (accel_phase - i) / accel_phase)
+            progress = (accel_phase - i) / accel_phase
+            delay = speed_delay * (1.0 + (ramp_start_multiplier - 1.0) * progress)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
@@ -480,7 +544,8 @@ class HardwareController:
                 print(f"MIN switch triggered at step {step_count} (decel phase)")
                 return True
             # Gradually increase delay (decrease speed)
-            delay = speed_delay * (1.0 + (i + 1) / decel_phase)
+            progress = (i + 1) / decel_phase
+            delay = speed_delay * (1.0 + (ramp_start_multiplier - 1.0) * progress)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.HIGH)
             time.sleep(delay)
             GPIO.output(self.SLIDER_STEP_PIN, GPIO.LOW)
@@ -512,7 +577,7 @@ class HardwareController:
         GPIO.output(self.KEY_CATCHER_DIR_PIN, GPIO.LOW)
         
         # Convert speed to delay
-        speed_delay = self._servo42c_speed_to_delay(speed)
+        speed_delay = self._servo42c_speed_to_delay(speed, self.KEY_CATCHER_MAX_PULSE_RATE)
         
         # Move until HOME switch is triggered or max steps reached
         for step in range(max_steps):
@@ -558,7 +623,7 @@ class HardwareController:
         GPIO.output(self.KEY_CATCHER_DIR_PIN, GPIO.HIGH if direction > 0 else GPIO.LOW)
         
         # Convert speed to delay using SERVO42C speed calculation
-        speed_delay = self._servo42c_speed_to_delay(speed)
+        speed_delay = self._servo42c_speed_to_delay(speed, self.KEY_CATCHER_MAX_PULSE_RATE)
         
         print(f"Key catcher moving {steps} steps ({'forward' if direction > 0 else 'reverse'}) at speed {speed}")
         
@@ -708,7 +773,7 @@ class HardwareController:
         GPIO.output(self.KEY_CATCHER_DIR_PIN, GPIO.HIGH)
         
         # Convert speed to delay
-        speed_delay = self._servo42c_speed_to_delay(speed)
+        speed_delay = self._servo42c_speed_to_delay(speed, self.KEY_CATCHER_MAX_PULSE_RATE)
         
         # Move until MAX switch is triggered
         max_steps = 8000  # Safety limit
