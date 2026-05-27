@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnHome = document.getElementById('btn-home');
     const btnFwd = document.getElementById('btn-move-fwd');
     const btnBwd = document.getElementById('btn-move-bwd');
+    const btnDirTest = document.getElementById('btn-dir-test');
     const btnSetZero = document.getElementById('btn-set-zero');
     const btnSliderTest = document.getElementById('btn-slider-test');
     const sliderStatus = document.getElementById('slider-status');
@@ -63,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnHome) btnHome.disabled = b;
         if (btnFwd) btnFwd.disabled = b;
         if (btnBwd) btnBwd.disabled = b;
+        if (btnDirTest) btnDirTest.disabled = b;
         if (btnSliderTest) btnSliderTest.disabled = b;
         if (btnLazerTest) btnLazerTest.disabled = b;
         if (btnLightburnPing) btnLightburnPing.disabled = b;
@@ -154,6 +156,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (e) {
                 if (msg) msg.textContent = 'Error: ' + e.message;
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    if (btnDirTest) {
+        btnDirTest.addEventListener('click', async () => {
+            if (msg) msg.textContent = 'Running DIR signal test...';
+            setBusy(true);
+            try {
+                const data = await postJSON('/api/rotary/dir_test', {
+                    cycles: 6,
+                    settle_ms: 10,
+                    hold_ms: 250
+                });
+
+                const mismatchCount = (data.transitions || []).filter(
+                    t => t.target_value !== t.read_settled
+                ).length;
+
+                if (msg) {
+                    if (mismatchCount === 0) {
+                        msg.textContent = `DIR test passed: ${data.cycles} toggles, pin ${data.pin}, all readbacks matched.`;
+                    } else {
+                        msg.textContent = `DIR test warning: ${mismatchCount}/${data.cycles} settled readbacks mismatched on pin ${data.pin}.`;
+                    }
+                }
+            } catch (e) {
+                if (msg) msg.textContent = 'DIR test error: ' + e.message;
             } finally {
                 setBusy(false);
             }

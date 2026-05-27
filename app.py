@@ -460,6 +460,9 @@ def run_cycle_background(total_cycles):
         safe_set_app_state("system_message", "Start state complete. Beginning key detection cycle...")
 
         # --- UPDATED: Key-driven cycle loop ---
+        # Rotary cycle direction intentionally uses negative sign so Start Job
+        # advances in the intended physical direction for the current CL57T setup.
+        cycle_step_degrees = -abs(config['step_degrees'])
         keys_processed = 0
         current_position = 0
         
@@ -567,7 +570,7 @@ def run_cycle_background(total_cycles):
                 next_angle = (current_position * config['step_degrees']) % 360
                 
                 move_success = hw.move_degrees(
-                    config['step_degrees'], 
+                    cycle_step_degrees,
                     speed=config['rotary_speed'],
                     accel_steps=config['rotary_accel_steps'],
                     decel_steps=config['rotary_decel_steps']
@@ -683,7 +686,7 @@ def run_cycle_background(total_cycles):
                 
                 # Move rotary motor by step degrees to next position
                 move_success = hw.move_degrees(
-                    config['step_degrees'], 
+                    cycle_step_degrees,
                     speed=config['rotary_speed'],
                     accel_steps=config['rotary_accel_steps'],
                     decel_steps=config['rotary_decel_steps']
@@ -723,13 +726,13 @@ def run_cycle_background(total_cycles):
                 safe_set_app_state("system_message", f"All {keys_processed} keys processed. Performing 2 additional steps...")
                 emit_status_update()
                 
-                # Rotate 2 additional steps (2 × step_degrees)
+                # Rotate 2 additional steps (2 × step_degrees, same cycle direction)
                 for step in range(1, 3):
                     safe_set_app_state("system_message", f"Additional step {step} of 2 ({config['step_degrees']}°)...")
                     emit_status_update()
                     
                     move_success = hw.move_degrees(
-                        config['step_degrees'],  # One step movement
+                        cycle_step_degrees,  # One step movement
                         speed=config['rotary_speed'],
                         accel_steps=config['rotary_accel_steps'],
                         decel_steps=config['rotary_decel_steps']
@@ -1072,6 +1075,43 @@ def api_rotary_move():
     safe_set_app_state("is_running", False)
     final_state = safe_get_app_state()
     return jsonify({"success": ok, "message": final_state["system_message"], "current_angle": final_state["current_angle"]})
+
+@app.route('/api/rotary/dir_test', methods=['POST'])
+def api_rotary_dir_test():
+    """Temporary diagnostic endpoint: toggle DIR pin and report readback timing."""
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
+        return jsonify({"success": False, "message": "Busy"}), 400
+
+    data = request.get_json(silent=True) or {}
+    try:
+        cycles = int(data.get("cycles", 4))
+        settle_ms = float(data.get("settle_ms", 5))
+        hold_ms = float(data.get("hold_ms", 250))
+    except (TypeError, ValueError):
+        return jsonify({
+            "success": False,
+            "message": "Invalid payload. Expected numeric cycles, settle_ms, hold_ms."
+        }), 400
+
+    safe_update_app_state({
+        "is_running": True,
+        "system_message": "Running rotary DIR diagnostic test..."
+    })
+
+    try:
+        results = hw.rotary_dir_test(cycles=cycles, settle_ms=settle_ms, hold_ms=hold_ms)
+        safe_set_app_state(
+            "system_message",
+            f"DIR test complete on pin {results['pin']} with {results['cycles']} toggles."
+        )
+        return jsonify(results)
+    except Exception as e:
+        error_msg = f"DIR test failed: {str(e)}"
+        safe_set_app_state("system_message", error_msg)
+        return jsonify({"success": False, "message": error_msg}), 500
+    finally:
+        safe_set_app_state("is_running", False)
 
 # --- ADDED: Set current position as zero ---
 @app.route('/api/rotary/set_zero', methods=['POST'])

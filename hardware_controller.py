@@ -225,6 +225,65 @@ class HardwareController:
             # Keep motor enabled for position holding (optional - can disable if desired)
             # self.enable_rotary_motor(False)
             pass
+
+    def rotary_dir_test(self, cycles=4, settle_ms=5, hold_ms=250):
+        """
+        Toggle rotary DIR pin and report readback timing.
+
+        Args:
+            cycles: Number of toggles to perform
+            settle_ms: Wait time after each DIR write before settled readback
+            hold_ms: Additional hold time per state for probing with a meter/scope
+
+        Returns:
+            dict: Direction toggle/readback timing details
+        """
+        cycles = max(1, int(cycles))
+        settle_s = max(0.0, float(settle_ms) / 1000.0)
+        hold_s = max(0.0, float(hold_ms) / 1000.0)
+
+        # Ensure output is actively driven during test.
+        self.enable_rotary_motor(True)
+        time.sleep(0.05)
+
+        initial_read = int(GPIO.input(self.DIR_PIN))
+        target_state = GPIO.LOW if initial_read == GPIO.HIGH else GPIO.HIGH
+        transitions = []
+
+        for idx in range(cycles):
+            t0 = time.perf_counter()
+            GPIO.output(self.DIR_PIN, target_state)
+            t1 = time.perf_counter()
+            immediate_read = int(GPIO.input(self.DIR_PIN))
+            time.sleep(settle_s)
+            t2 = time.perf_counter()
+            settled_read = int(GPIO.input(self.DIR_PIN))
+            if hold_s > 0:
+                time.sleep(hold_s)
+            t3 = time.perf_counter()
+
+            transitions.append({
+                "index": idx + 1,
+                "target": "HIGH" if target_state == GPIO.HIGH else "LOW",
+                "target_value": int(target_state),
+                "read_immediate": immediate_read,
+                "read_settled": settled_read,
+                "write_overhead_ms": (t1 - t0) * 1000.0,
+                "settle_wait_ms": (t2 - t1) * 1000.0,
+                "hold_wait_ms": (t3 - t2) * 1000.0
+            })
+
+            target_state = GPIO.LOW if target_state == GPIO.HIGH else GPIO.HIGH
+
+        return {
+            "success": True,
+            "pin": self.DIR_PIN,
+            "initial_read": initial_read,
+            "cycles": cycles,
+            "settle_ms_requested": float(settle_ms),
+            "hold_ms_requested": float(hold_ms),
+            "transitions": transitions
+        }
     
     def _speed_to_delay(self, speed):
         """Convert 0-100 speed to delay in seconds for rotary motor (300 RPM maximum)."""
