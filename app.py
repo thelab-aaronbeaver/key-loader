@@ -12,7 +12,9 @@ import socket
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'key_loader_secret_key_2024'
-socketio = SocketIO(app, cors_allowed_origins="*")
+# eventlet is the default async driver when installed; status broadcasts must use
+# socketio.start_background_task + socketio.sleep (not threading.Thread + time.sleep).
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 hw = HardwareController()
 
 # --- ADDED: Thread Safety Lock ---
@@ -139,8 +141,9 @@ def emit_status_update():
             # Create a copy for emission, excluding non-serializable objects
             state_copy = {k: v for k, v in app_state.items() if k != "cycle_thread"}
         
-        # Emit to all connected clients
-        socketio.emit('status_update', state_copy)
+        # Emit from app context so background threads (cycle, broadcast) can push to clients.
+        with app.app_context():
+            socketio.emit('status_update', state_copy)
     except Exception as e:
         print(f"Error emitting status update: {e}")
 
@@ -180,7 +183,7 @@ if config.get("lightburn_enabled", True):
 def handle_connect():
     """Handle client connection."""
     print('Client connected')
-    # Send initial status update
+    ensure_status_broadcast()
     emit_status_update()
 
 @socketio.on('disconnect')
@@ -1481,24 +1484,43 @@ def api_lightburn_start():
         return jsonify({"success": False, "message": f"Error: {str(e)}"}), 500
 
 
-def status_broadcast_thread():
-    """Background thread that continuously broadcasts sensor status updates."""
-    print("✅ Status broadcast thread started")
+_status_broadcast_started = False
+
+def status_broadcast_loop():
+    """Cooperative background loop for live sensor/UI updates (eventlet-safe)."""
+    print("✅ Status broadcast loop started")
     while True:
         try:
             emit_status_update()
-            time.sleep(0.2)  # Update 5 times per second
+            socketio.sleep(0.2)  # ~5 Hz; must use socketio.sleep under eventlet
         except Exception as e:
-            print(f"Error in status broadcast thread: {e}")
-            time.sleep(1)  # Back off on errors
+            print(f"Error in status broadcast loop: {e}")
+            socketio.sleep(1)
+
+def ensure_status_broadcast():
+    """Start the broadcast loop once per server process."""
+    global _status_broadcast_started
+    if not _status_broadcast_started:
+        _status_broadcast_started = True
+        socketio.start_background_task(status_broadcast_loop)
 
 if __name__ == '__main__':
     try:
-        # Start background status broadcasting thread
-        status_thread = threading.Thread(target=status_broadcast_thread, daemon=True)
-        status_thread.start()
-        
-        socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+        ensure_status_broadcast()
+
+        # Flask debug reloader spawns a second process; importing this module again
+        # constructs a second HardwareController() and re-initializes GPIO — unreliable on Pi.
+        # Set FLASK_USE_RELOADER=1 if you need auto-reload during development.
+        debug = os.environ.get("FLASK_DEBUG", "1") not in ("0", "false", "False")
+        use_reloader = os.environ.get("FLASK_USE_RELOADER", "0") in ("1", "true", "True")
+
+        socketio.run(
+            app,
+            host="0.0.0.0",
+            port=5000,
+            debug=debug,
+            use_reloader=use_reloader,
+        )
     finally:
         hw.cleanup()
 

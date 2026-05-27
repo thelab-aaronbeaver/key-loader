@@ -473,19 +473,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let statusPollInterval = null;
+
+    function startStatusPolling() {
+        if (statusPollInterval) return;
+        statusPollInterval = setInterval(refreshStatusFallback, 1000);
+    }
+
+    function stopStatusPolling() {
+        if (statusPollInterval) {
+            clearInterval(statusPollInterval);
+            statusPollInterval = null;
+        }
+    }
+
     // WebSocket event handlers (only if socket is available)
     if (socket) {
         socket.on('connect', function () {
             console.log('Config page connected to server via WebSocket');
-            // Request initial status
+            stopStatusPolling();
             socket.emit('request_status');
-            // Update key catcher position
             updateKeyCatcherPosition();
         });
 
         socket.on('disconnect', function () {
             console.log('Config page disconnected from server');
             if (msg) msg.textContent = 'Connection lost. Attempting to reconnect...';
+            startStatusPolling();
         });
 
         socket.on('status_update', function (data) {
@@ -642,8 +656,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load configuration and start fallback polling if WebSocket is not available
     loadConfig();
     if (!socket) {
-        // Start fallback polling if WebSocket failed
         refreshStatusFallback();
+        startStatusPolling();
     }
 });
 

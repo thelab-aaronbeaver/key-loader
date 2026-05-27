@@ -14,7 +14,8 @@ class HardwareController:
         
         # Sensors
         self.HALL_PIN = 27
-        self.INDUCTIVE_PIN = 22
+        self.INDUCTIVE_PIN = 5
+    
         
         # --- ADDED: Legacy rotary limit switch pins (optional) ---
         self.HOME_SWITCH_PIN = 7  # Optional legacy home switch (not required if using hall)

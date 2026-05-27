@@ -121,17 +121,33 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    // HTTP polling fallback when WebSocket is down (keeps UI live on Pi/eventlet hiccups)
+    let statusPollInterval = null;
+
+    function startStatusPolling() {
+        if (statusPollInterval) return;
+        statusPollInterval = setInterval(refreshStatusFallback, 1000);
+    }
+
+    function stopStatusPolling() {
+        if (statusPollInterval) {
+            clearInterval(statusPollInterval);
+            statusPollInterval = null;
+        }
+    }
+
     // WebSocket event handlers (only if socket is available)
     if (socket) {
         socket.on('connect', function () {
             console.log('Connected to server via WebSocket');
-            // Request initial status
+            stopStatusPolling();
             socket.emit('request_status');
         });
 
         socket.on('disconnect', function () {
             console.log('Disconnected from server');
             if (messageDisplay) messageDisplay.textContent = 'Connection lost. Attempting to reconnect...';
+            startStatusPolling();
         });
 
         socket.on('status_update', function (data) {
@@ -272,10 +288,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initialize: Load config first
     loadConfig();
 
-    // Start fallback polling if WebSocket is not available
     if (!socket) {
         console.log('WebSocket not available, using polling fallback');
-        refreshStatusFallback(); // Initial load
-        setInterval(refreshStatusFallback, 1000); // Poll every second
+        refreshStatusFallback();
+        startStatusPolling();
     }
 });
