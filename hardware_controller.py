@@ -61,6 +61,7 @@ class HardwareController:
         # This matches the CL57T DIP switch settings for 16x microstepping.
         self.PULSES_PER_REV = 3200
         self.SPEED_DELAY = 0.0002 # CL57T can handle faster speeds than basic drivers
+        self.ROTARY_DIR_SETUP_DELAY = 0.002  # allow DIR line to settle before STEP pulses
 
         # --- Setup GPIO ---
         GPIO.setmode(GPIO.BCM)
@@ -145,6 +146,7 @@ class HardwareController:
         
         # Set direction for homing (e.g., counter-clockwise)
         GPIO.output(self.DIR_PIN, GPIO.LOW)
+        time.sleep(self.ROTARY_DIR_SETUP_DELAY)
 
         # Rotate until hall is triggered (active low). Limit to ~1.5 revs to avoid loops
         max_steps = int(self.PULSES_PER_REV * 1.5)
@@ -173,15 +175,17 @@ class HardwareController:
         time.sleep(0.1)  # Allow motor to enable
 
         # Direction based on sign
-        if degrees >= 0:
-            GPIO.output(self.DIR_PIN, GPIO.HIGH)
-        else:
-            GPIO.output(self.DIR_PIN, GPIO.LOW)
+        direction_high = degrees >= 0
+        GPIO.output(self.DIR_PIN, GPIO.HIGH if direction_high else GPIO.LOW)
+        time.sleep(self.ROTARY_DIR_SETUP_DELAY)
 
         # Convert speed (0-100) to delay
         base_delay = self._speed_to_delay(speed)
         
-        print(f"Moving {steps_to_move} steps ({'CW' if degrees >= 0 else 'CCW'}) at speed {speed}...")
+        print(
+            f"Moving {steps_to_move} steps ({'CW' if direction_high else 'CCW'}) "
+            f"at speed {speed} (DIR={'HIGH' if direction_high else 'LOW'})..."
+        )
         
         # Calculate acceleration/deceleration phases
         accel_phase = min(accel_steps, steps_to_move // 2)
