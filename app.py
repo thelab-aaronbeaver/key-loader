@@ -55,14 +55,13 @@ def load_config():
     default_config = {
         "step_degrees": 36.0,
         "pause_seconds": 1.0,       # time to hold at position (seconds)
-        "slider_in_speed": 80,      # 0-100 speed scale (0=stopped, 100=SERVO42C max rated RPM)
-        "slider_out_speed": 80,     # 0-100 speed scale (0=stopped, 100=SERVO42C max rated RPM)
+        "slider_in_speed": 80,      # 0-100 speed scale (0=stopped, 100=750 RPM) - SERVO42C 12V OPTIMIZED
+        "slider_out_speed": 80,     # 0-100 speed scale (0=stopped, 100=750 RPM) - SERVO42C 12V OPTIMIZED
         "slider_accel_steps": 15,   # steps for slider acceleration ramp-up - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
         "slider_decel_steps": 15,   # steps for slider deceleration ramp-down - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
         "rotary_speed": 100,        # 0-100 speed scale for rotary motor - MAXIMUM SPEED
         "rotary_accel_steps": 50,   # steps for acceleration ramp-up - reduced for faster acceleration
         "rotary_decel_steps": 50,   # steps for deceleration ramp-down - reduced for faster deceleration
-        "flip_rotary_direction": False,  # invert rotary motor direction for all rotary moves
         "cycles": 10,               # default cycle count
         "home_offset": 0.0,         # fine-tuned home position offset from hall sensor (degrees)
         "udp_enabled": True,        # enable UDP trigger to LightBurn
@@ -156,10 +155,6 @@ def save_config(config_dict):
 
 # Load initial config
 config = load_config()
-
-def apply_rotary_direction(degrees):
-    """Apply configured rotary direction inversion to a degree command."""
-    return -degrees if config.get("flip_rotary_direction", False) else degrees
 
 # Initialize LightBurn controller
 lb_controller = None
@@ -325,9 +320,9 @@ def api_set_config():
         if 'pause_seconds' in data:
             config['pause_seconds'] = float(data['pause_seconds'])
         if 'slider_in_speed' in data:
-            config['slider_in_speed'] = max(0, min(100, int(data['slider_in_speed'])))  # allow up to 100 (mapped to motor max RPM)
+            config['slider_in_speed'] = max(0, min(100, int(data['slider_in_speed'])))  # allow up to 100 for 750 RPM maximum
         if 'slider_out_speed' in data:
-            config['slider_out_speed'] = max(0, min(100, int(data['slider_out_speed'])))  # allow up to 100 (mapped to motor max RPM)
+            config['slider_out_speed'] = max(0, min(100, int(data['slider_out_speed'])))  # allow up to 100 for 750 RPM maximum
         if 'slider_accel_steps' in data:
             config['slider_accel_steps'] = max(1, int(data['slider_accel_steps']))  # minimum 1 step
         if 'slider_decel_steps' in data:
@@ -338,8 +333,6 @@ def api_set_config():
             config['rotary_accel_steps'] = max(1, int(data['rotary_accel_steps']))  # minimum 1 step
         if 'rotary_decel_steps' in data:
             config['rotary_decel_steps'] = max(1, int(data['rotary_decel_steps']))  # minimum 1 step
-        if 'flip_rotary_direction' in data:
-            config['flip_rotary_direction'] = bool(data['flip_rotary_direction'])
         if 'cycles' in data:
             config['cycles'] = int(data['cycles'])
         if 'home_offset' in data:
@@ -467,7 +460,6 @@ def run_cycle_background(total_cycles):
         safe_set_app_state("system_message", "Start state complete. Beginning key detection cycle...")
 
         # --- UPDATED: Key-driven cycle loop ---
-        cycle_step_degrees = apply_rotary_direction(abs(config['step_degrees']))
         keys_processed = 0
         current_position = 0
         
@@ -575,7 +567,7 @@ def run_cycle_background(total_cycles):
                 next_angle = (current_position * config['step_degrees']) % 360
                 
                 move_success = hw.move_degrees(
-                    cycle_step_degrees,
+                    config['step_degrees'], 
                     speed=config['rotary_speed'],
                     accel_steps=config['rotary_accel_steps'],
                     decel_steps=config['rotary_decel_steps']
@@ -691,7 +683,7 @@ def run_cycle_background(total_cycles):
                 
                 # Move rotary motor by step degrees to next position
                 move_success = hw.move_degrees(
-                    cycle_step_degrees,
+                    config['step_degrees'], 
                     speed=config['rotary_speed'],
                     accel_steps=config['rotary_accel_steps'],
                     decel_steps=config['rotary_decel_steps']
@@ -731,13 +723,13 @@ def run_cycle_background(total_cycles):
                 safe_set_app_state("system_message", f"All {keys_processed} keys processed. Performing 2 additional steps...")
                 emit_status_update()
                 
-                # Rotate 2 additional steps (2 × step_degrees, same cycle direction)
+                # Rotate 2 additional steps (2 × step_degrees)
                 for step in range(1, 3):
                     safe_set_app_state("system_message", f"Additional step {step} of 2 ({config['step_degrees']}°)...")
                     emit_status_update()
                     
                     move_success = hw.move_degrees(
-                        cycle_step_degrees,  # One step movement
+                        config['step_degrees'],  # One step movement
                         speed=config['rotary_speed'],
                         accel_steps=config['rotary_accel_steps'],
                         decel_steps=config['rotary_decel_steps']
@@ -794,7 +786,7 @@ def home_machine():
         if config.get("home_offset", 0.0) != 0.0:
             safe_set_app_state("system_message", f"Applying fine adjustment of {config['home_offset']:.1f}°...")
             move_success = hw.move_degrees(
-                apply_rotary_direction(config['home_offset']),
+                config['home_offset'], 
                 speed=config['rotary_speed'],
                 accel_steps=config['rotary_accel_steps'],
                 decel_steps=config['rotary_decel_steps']
@@ -1054,7 +1046,7 @@ def api_rotary_move():
     })
     
     ok = hw.move_degrees(
-        apply_rotary_direction(degrees),
+        degrees,
         speed=config['rotary_speed'],
         accel_steps=config['rotary_accel_steps'],
         decel_steps=config['rotary_decel_steps']
@@ -1080,43 +1072,6 @@ def api_rotary_move():
     safe_set_app_state("is_running", False)
     final_state = safe_get_app_state()
     return jsonify({"success": ok, "message": final_state["system_message"], "current_angle": final_state["current_angle"]})
-
-@app.route('/api/rotary/dir_test', methods=['POST'])
-def api_rotary_dir_test():
-    """Temporary diagnostic endpoint: toggle DIR pin and report readback timing."""
-    current_state = safe_get_app_state()
-    if current_state["is_running"]:
-        return jsonify({"success": False, "message": "Busy"}), 400
-
-    data = request.get_json(silent=True) or {}
-    try:
-        cycles = int(data.get("cycles", 4))
-        settle_ms = float(data.get("settle_ms", 5))
-        hold_ms = float(data.get("hold_ms", 250))
-    except (TypeError, ValueError):
-        return jsonify({
-            "success": False,
-            "message": "Invalid payload. Expected numeric cycles, settle_ms, hold_ms."
-        }), 400
-
-    safe_update_app_state({
-        "is_running": True,
-        "system_message": "Running rotary DIR diagnostic test..."
-    })
-
-    try:
-        results = hw.rotary_dir_test(cycles=cycles, settle_ms=settle_ms, hold_ms=hold_ms)
-        safe_set_app_state(
-            "system_message",
-            f"DIR test complete on pin {results['pin']} with {results['cycles']} toggles."
-        )
-        return jsonify(results)
-    except Exception as e:
-        error_msg = f"DIR test failed: {str(e)}"
-        safe_set_app_state("system_message", error_msg)
-        return jsonify({"success": False, "message": error_msg}), 500
-    finally:
-        safe_set_app_state("is_running", False)
 
 # --- ADDED: Set current position as zero ---
 @app.route('/api/rotary/set_zero', methods=['POST'])
@@ -1398,10 +1353,9 @@ def api_key_catcher_test_cycle():
     
     try:
         speed = config.get('key_catcher_speed', 80)
-        pause_position = config.get('key_catcher_pause_position', 4000)
         
         # Run the test cycle
-        results = hw.key_catcher_test_cycle(speed=speed, pause_position=pause_position)
+        results = hw.key_catcher_test_cycle(speed=speed)
         
         # Build message from results
         message = " | ".join(results["messages"])

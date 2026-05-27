@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnHome = document.getElementById('btn-home');
     const btnFwd = document.getElementById('btn-move-fwd');
     const btnBwd = document.getElementById('btn-move-bwd');
-    const btnDirTest = document.getElementById('btn-dir-test');
     const btnSetZero = document.getElementById('btn-set-zero');
     const btnSliderTest = document.getElementById('btn-slider-test');
     const sliderStatus = document.getElementById('slider-status');
@@ -30,7 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const inpRotarySpeed = document.getElementById('rotary_speed');
     const inpRotaryAccel = document.getElementById('rotary_accel_steps');
     const inpRotaryDecel = document.getElementById('rotary_decel_steps');
-    const inpFlipRotaryDirection = document.getElementById('flip_rotary_direction');
     const inpInSpeed = document.getElementById('slider_in_speed');
     const inpOutSpeed = document.getElementById('slider_out_speed');
     const inpSliderAccel = document.getElementById('slider_accel_steps');
@@ -65,7 +63,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnHome) btnHome.disabled = b;
         if (btnFwd) btnFwd.disabled = b;
         if (btnBwd) btnBwd.disabled = b;
-        if (btnDirTest) btnDirTest.disabled = b;
         if (btnSliderTest) btnSliderTest.disabled = b;
         if (btnLazerTest) btnLazerTest.disabled = b;
         if (btnLightburnPing) btnLightburnPing.disabled = b;
@@ -157,36 +154,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (e) {
                 if (msg) msg.textContent = 'Error: ' + e.message;
-            } finally {
-                setBusy(false);
-            }
-        });
-    }
-
-    if (btnDirTest) {
-        btnDirTest.addEventListener('click', async () => {
-            if (msg) msg.textContent = 'Running DIR signal test...';
-            setBusy(true);
-            try {
-                const data = await postJSON('/api/rotary/dir_test', {
-                    cycles: 6,
-                    settle_ms: 10,
-                    hold_ms: 250
-                });
-
-                const mismatchCount = (data.transitions || []).filter(
-                    t => t.target_value !== t.read_settled
-                ).length;
-
-                if (msg) {
-                    if (mismatchCount === 0) {
-                        msg.textContent = `DIR test passed: ${data.cycles} toggles, pin ${data.pin}, all readbacks matched.`;
-                    } else {
-                        msg.textContent = `DIR test warning: ${mismatchCount}/${data.cycles} settled readbacks mismatched on pin ${data.pin}.`;
-                    }
-                }
-            } catch (e) {
-                if (msg) msg.textContent = 'DIR test error: ' + e.message;
             } finally {
                 setBusy(false);
             }
@@ -574,7 +541,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inpRotarySpeed) inpRotarySpeed.value = cfg.rotary_speed;
             if (inpRotaryAccel) inpRotaryAccel.value = cfg.rotary_accel_steps;
             if (inpRotaryDecel) inpRotaryDecel.value = cfg.rotary_decel_steps;
-            if (inpFlipRotaryDirection) inpFlipRotaryDirection.checked = cfg.flip_rotary_direction === true;
             if (inpInSpeed) inpInSpeed.value = cfg.slider_in_speed;
             if (inpOutSpeed) inpOutSpeed.value = cfg.slider_out_speed;
             if (inpSliderAccel) inpSliderAccel.value = cfg.slider_accel_steps || 15;
@@ -611,7 +577,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         rotary_speed: parseInt(inpRotarySpeed?.value || 100, 10),
                         rotary_accel_steps: parseInt(inpRotaryAccel?.value || 50, 10),
                         rotary_decel_steps: parseInt(inpRotaryDecel?.value || 50, 10),
-                        flip_rotary_direction: inpFlipRotaryDirection?.checked === true,
                         slider_in_speed: parseInt(inpInSpeed?.value || 80, 10),
                         slider_out_speed: parseInt(inpOutSpeed?.value || 80, 10),
                         slider_accel_steps: parseInt(inpSliderAccel?.value || 15, 10),
