@@ -1405,6 +1405,7 @@ def api_key_catcher_test_cycle():
         
         # Run the test cycle
         results = hw.key_catcher_test_cycle(speed=speed, pause_position=pause_position)
+        results = hw.key_catcher_test_cycle(speed=speed)
         
         # Build message from results
         message = " | ".join(results["messages"])
