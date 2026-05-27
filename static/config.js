@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const inpRotarySpeed = document.getElementById('rotary_speed');
     const inpRotaryAccel = document.getElementById('rotary_accel_steps');
     const inpRotaryDecel = document.getElementById('rotary_decel_steps');
+    const inpFlipRotaryDirection = document.getElementById('flip_rotary_direction');
     const inpInSpeed = document.getElementById('slider_in_speed');
     const inpOutSpeed = document.getElementById('slider_out_speed');
     const inpSliderAccel = document.getElementById('slider_accel_steps');
@@ -573,6 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inpRotarySpeed) inpRotarySpeed.value = cfg.rotary_speed;
             if (inpRotaryAccel) inpRotaryAccel.value = cfg.rotary_accel_steps;
             if (inpRotaryDecel) inpRotaryDecel.value = cfg.rotary_decel_steps;
+            if (inpFlipRotaryDirection) inpFlipRotaryDirection.checked = cfg.flip_rotary_direction === true;
             if (inpInSpeed) inpInSpeed.value = cfg.slider_in_speed;
             if (inpOutSpeed) inpOutSpeed.value = cfg.slider_out_speed;
             if (inpSliderAccel) inpSliderAccel.value = cfg.slider_accel_steps || 15;
@@ -609,6 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         rotary_speed: parseInt(inpRotarySpeed?.value || 100, 10),
                         rotary_accel_steps: parseInt(inpRotaryAccel?.value || 50, 10),
                         rotary_decel_steps: parseInt(inpRotaryDecel?.value || 50, 10),
+                        flip_rotary_direction: inpFlipRotaryDirection?.checked === true,
                         slider_in_speed: parseInt(inpInSpeed?.value || 80, 10),
                         slider_out_speed: parseInt(inpOutSpeed?.value || 80, 10),
                         slider_accel_steps: parseInt(inpSliderAccel?.value || 15, 10),

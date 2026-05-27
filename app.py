@@ -62,6 +62,7 @@ def load_config():
         "rotary_speed": 100,        # 0-100 speed scale for rotary motor - MAXIMUM SPEED
         "rotary_accel_steps": 50,   # steps for acceleration ramp-up - reduced for faster acceleration
         "rotary_decel_steps": 50,   # steps for deceleration ramp-down - reduced for faster deceleration
+        "flip_rotary_direction": False,  # invert rotary motor direction for all rotary moves
         "cycles": 10,               # default cycle count
         "home_offset": 0.0,         # fine-tuned home position offset from hall sensor (degrees)
         "udp_enabled": True,        # enable UDP trigger to LightBurn
@@ -155,6 +156,10 @@ def save_config(config_dict):
 
 # Load initial config
 config = load_config()
+
+def apply_rotary_direction(degrees):
+    """Apply configured rotary direction inversion to a degree command."""
+    return -degrees if config.get("flip_rotary_direction", False) else degrees
 
 # Initialize LightBurn controller
 lb_controller = None
@@ -333,6 +338,8 @@ def api_set_config():
             config['rotary_accel_steps'] = max(1, int(data['rotary_accel_steps']))  # minimum 1 step
         if 'rotary_decel_steps' in data:
             config['rotary_decel_steps'] = max(1, int(data['rotary_decel_steps']))  # minimum 1 step
+        if 'flip_rotary_direction' in data:
+            config['flip_rotary_direction'] = bool(data['flip_rotary_direction'])
         if 'cycles' in data:
             config['cycles'] = int(data['cycles'])
         if 'home_offset' in data:
@@ -460,9 +467,7 @@ def run_cycle_background(total_cycles):
         safe_set_app_state("system_message", "Start state complete. Beginning key detection cycle...")
 
         # --- UPDATED: Key-driven cycle loop ---
-        # Rotary cycle direction intentionally uses negative sign so Start Job
-        # advances in the intended physical direction for the current CL57T setup.
-        cycle_step_degrees = -abs(config['step_degrees'])
+        cycle_step_degrees = apply_rotary_direction(abs(config['step_degrees']))
         keys_processed = 0
         current_position = 0
         
@@ -789,7 +794,7 @@ def home_machine():
         if config.get("home_offset", 0.0) != 0.0:
             safe_set_app_state("system_message", f"Applying fine adjustment of {config['home_offset']:.1f}°...")
             move_success = hw.move_degrees(
-                config['home_offset'], 
+                apply_rotary_direction(config['home_offset']),
                 speed=config['rotary_speed'],
                 accel_steps=config['rotary_accel_steps'],
                 decel_steps=config['rotary_decel_steps']
@@ -1049,7 +1054,7 @@ def api_rotary_move():
     })
     
     ok = hw.move_degrees(
-        degrees,
+        apply_rotary_direction(degrees),
         speed=config['rotary_speed'],
         accel_steps=config['rotary_accel_steps'],
         decel_steps=config['rotary_decel_steps']
