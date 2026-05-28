@@ -6,7 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Configuration</title>
     <link rel="stylesheet" href="/static/style.css">
-</head>
+    <link rel="stylesheet" href="C:\Users\aaron\Documents\Github%20Projects\key-loader-1\static\style.css">
+
+
+
 
 <body>
     <div class="container">
@@ -69,23 +72,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="flex-item"><span class="divider"></span></div>
-                <div class="flex-item">
-                    <h2>Lazer UDP Test</h2>
-                    <div class="row">
-                        <button id="btn-lazer-test" class="btn-move">Test Lazer Trigger</button>
-                    </div>
-                    <div class="row">
-                        <div class="tooltip">Details
-                            <span class="tooltiptext">This will send UDP trigger to LightBurn on Mac
-                                (192.168.1.170:5005).
-                                <br> Check Mac console to verify message received</span>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <span id="lazer-status" class="status-text">Ready</span>
-                    </div>
-                </div>
+
             </div>
 
         </div>
@@ -159,7 +146,7 @@
                     </div>
                     <div class="row">
                         <div class="tooltip">Details
-                            <span class="tooltiptext">Tests connection to LightBurn on Mac (192.168.1.170:19840).
+                            <span class="tooltiptext">Tests connection to LightBurn on Mac (IP Address).
                                 <br>Ensure LightBurn is running and UDP automation is enabled</span>
                         </div>
                     </div>
@@ -185,6 +172,23 @@
                             <span class="tooltiptext">Manually start LightBurn job via UDP.
                                 <br>For testing only - jobs start automatically during cycle</span>
                         </div>
+                    </div>
+                </div>
+                <div class="flex-item"><span class="divider"></span></div>
+                <div class="flex-item">
+                    <h2>Lazer UDP Test</h2>
+                    <div class="row">
+                        <button id="btn-lazer-test" class="btn-move">Test Lazer Trigger</button>
+                    </div>
+                    <div class="row">
+                        <div class="tooltip">Details
+                            <span class="tooltiptext">This will send UDP trigger to LightBurn on Mac
+                                (192.168.1.170:5005).
+                                <br> Check Mac console to verify message received</span>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <span id="lazer-status" class="status-text">Ready</span>
                     </div>
                 </div>
             </div>
@@ -237,6 +241,12 @@
                 <input id="slider_decel_steps" type="number" min="1" step="1" value="15">
             </div>
             <div class="row">
+                <label for="slider_max_pulses">Slider Max Pulses (Safety)</label>
+                <input id="slider_max_pulses" type="number" min="1000" step="100" value="12000">
+                <label for="slider_max_move_seconds">Slider Max Move Time (s)</label>
+                <input id="slider_max_move_seconds" type="number" min="0.5" step="0.1" value="3.0">
+            </div>
+            <div class="row">
                 <label for="home_offset">Home Offset (degrees)</label>
                 <input id="home_offset" type="number" step="0.1" value="0.0">
                 <div class="info-text">Fine-tune adjustment from hall sensor position</div>
@@ -285,6 +295,43 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const cards = document.querySelectorAll('.card');
+
+            cards.forEach((card, index) => {
+                const directH2 = card.querySelector(':scope > h2');
+                const header = document.createElement('div');
+                header.className = 'card-toggle-header';
+
+                const title = directH2 || document.createElement('h2');
+                if (!directH2) {
+                    const firstInnerH2 = card.querySelector('h2');
+                    title.textContent = firstInnerH2 ? `${firstInnerH2.textContent.trim()} Section` : `Section ${index + 1}`;
+                }
+
+                const toggleButton = document.createElement('button');
+                toggleButton.type = 'button';
+                toggleButton.className = 'btn-toggle';
+                toggleButton.textContent = 'Close';
+
+                const content = document.createElement('div');
+                const cardChildren = Array.from(card.children).filter(child => child !== directH2);
+                cardChildren.forEach(child => content.appendChild(child));
+
+                header.appendChild(title);
+                header.appendChild(toggleButton);
+
+                card.appendChild(content);
+                card.prepend(header);
+
+                toggleButton.addEventListener('click', () => {
+                    const isCollapsed = content.classList.toggle('card-content-collapsed');
+                    toggleButton.textContent = isCollapsed ? 'Open' : 'Close';
+                });
+            });
+        });
+    </script>
     <script src="/static/config.js"></script>
 </body>
 

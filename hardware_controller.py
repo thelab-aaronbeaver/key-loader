@@ -400,8 +400,8 @@ class HardwareController:
         return sum(readings) >= 3
 
     # --- ADDED: Slider movement helpers ---
-    def slider_move_to_max(self, speed: int, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50, ultra_fast: bool = False) -> bool:
-        """Drive slider outward until MAX switch triggers or max_pulses reached with acceleration/deceleration."""
+    def slider_move_to_max(self, speed: int, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50, ultra_fast: bool = False, max_seconds=None) -> bool:
+        """Drive slider outward until MAX switch triggers or safety limits are reached."""
         # Enable slider motor
         self.enable_slider_motor(True)
         if not ultra_fast:
@@ -427,10 +427,15 @@ class HardwareController:
         print(f"Slider MAX phases: accel={accel_phase}, cruise={cruise_phase}, decel={decel_phase}")
         
         step_count = 0
+        start_time = time.time()
         
         # Acceleration phase (short for SERVO42C)
         ramp_start_multiplier = 4.0 if speed_delay <= 0.00005 else 2.0
         for i in range(accel_phase):
+            if max_seconds is not None and (time.time() - start_time) >= max_seconds:
+                print(f"🛑 SLIDER SAFETY TRIP (MAX): movement timeout after {max_seconds:.2f}s at step {step_count}")
+                self.enable_slider_motor(False)
+                return False
             if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (accel phase)")
                 return True
@@ -445,6 +450,10 @@ class HardwareController:
         
         # Cruise phase
         for _ in range(cruise_phase):
+            if max_seconds is not None and (time.time() - start_time) >= max_seconds:
+                print(f"🛑 SLIDER SAFETY TRIP (MAX): movement timeout after {max_seconds:.2f}s at step {step_count}")
+                self.enable_slider_motor(False)
+                return False
             if ultra_fast:
                 # ULTRA-FAST: Use non-debounced reading for maximum speed
                 if self.read_slider_max():
@@ -463,6 +472,10 @@ class HardwareController:
         
         # Deceleration phase (short for SERVO42C)
         for i in range(decel_phase):
+            if max_seconds is not None and (time.time() - start_time) >= max_seconds:
+                print(f"🛑 SLIDER SAFETY TRIP (MAX): movement timeout after {max_seconds:.2f}s at step {step_count}")
+                self.enable_slider_motor(False)
+                return False
             if self.read_slider_max_debounced():
                 print(f"MAX switch triggered at step {step_count} (decel phase)")
                 return True
@@ -475,11 +488,12 @@ class HardwareController:
             time.sleep(delay)
             step_count += 1
         
-        print(f"MAX movement completed: {step_count} steps, MAX switch not triggered")
+        print(f"🛑 SLIDER SAFETY TRIP (MAX): switch not triggered within {step_count} steps")
+        self.enable_slider_motor(False)
         return False
 
-    def slider_move_to_min(self, speed: int, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50, ultra_fast: bool = False) -> bool:
-        """Drive slider inward until MIN switch triggers or max_pulses reached with acceleration/deceleration."""
+    def slider_move_to_min(self, speed: int, max_pulses: int = 20000, accel_steps: int = 50, decel_steps: int = 50, ultra_fast: bool = False, max_seconds=None) -> bool:
+        """Drive slider inward until MIN switch triggers or safety limits are reached."""
         # Enable slider motor
         self.enable_slider_motor(True)
         if not ultra_fast:
@@ -505,10 +519,15 @@ class HardwareController:
         print(f"Slider MIN phases: accel={accel_phase}, cruise={cruise_phase}, decel={decel_phase}")
         
         step_count = 0
+        start_time = time.time()
         
         # Acceleration phase (short for SERVO42C)
         ramp_start_multiplier = 4.0 if speed_delay <= 0.00005 else 2.0
         for i in range(accel_phase):
+            if max_seconds is not None and (time.time() - start_time) >= max_seconds:
+                print(f"🛑 SLIDER SAFETY TRIP (MIN): movement timeout after {max_seconds:.2f}s at step {step_count}")
+                self.enable_slider_motor(False)
+                return False
             if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (accel phase)")
                 return True
@@ -523,6 +542,10 @@ class HardwareController:
         
         # Cruise phase
         for _ in range(cruise_phase):
+            if max_seconds is not None and (time.time() - start_time) >= max_seconds:
+                print(f"🛑 SLIDER SAFETY TRIP (MIN): movement timeout after {max_seconds:.2f}s at step {step_count}")
+                self.enable_slider_motor(False)
+                return False
             if ultra_fast:
                 # ULTRA-FAST: Use non-debounced reading for maximum speed
                 if self.read_slider_min():
@@ -541,6 +564,10 @@ class HardwareController:
         
         # Deceleration phase (short for SERVO42C)
         for i in range(decel_phase):
+            if max_seconds is not None and (time.time() - start_time) >= max_seconds:
+                print(f"🛑 SLIDER SAFETY TRIP (MIN): movement timeout after {max_seconds:.2f}s at step {step_count}")
+                self.enable_slider_motor(False)
+                return False
             if self.read_slider_min_debounced():
                 print(f"MIN switch triggered at step {step_count} (decel phase)")
                 return True
@@ -553,7 +580,8 @@ class HardwareController:
             time.sleep(delay)
             step_count += 1
         
-        print(f"MIN movement completed: {step_count} steps, MIN switch not triggered")
+        print(f"🛑 SLIDER SAFETY TRIP (MIN): switch not triggered within {step_count} steps")
+        self.enable_slider_motor(False)
         return False
 
     # --- ADDED: Key catcher motor control methods ---

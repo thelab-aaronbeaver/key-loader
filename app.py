@@ -63,6 +63,8 @@ def load_config():
         "slider_out_speed": 80,     # 0-100 speed scale (0=stopped, 100=SERVO42C max rated RPM)
         "slider_accel_steps": 15,   # steps for slider acceleration ramp-up - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
         "slider_decel_steps": 15,   # steps for slider deceleration ramp-down - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
+        "slider_max_pulses": 12000, # safety cap: max pulses per slider move before bind trip
+        "slider_max_move_seconds": 3.0,  # safety cap: max seconds per slider move before bind trip
         "rotary_speed": 100,        # 0-100 speed scale for rotary motor - MAXIMUM SPEED
         "rotary_accel_steps": 50,   # steps for acceleration ramp-up - reduced for faster acceleration
         "rotary_decel_steps": 50,   # steps for deceleration ramp-down - reduced for faster deceleration
@@ -337,6 +339,10 @@ def api_set_config():
             config['slider_accel_steps'] = max(1, int(data['slider_accel_steps']))  # minimum 1 step
         if 'slider_decel_steps' in data:
             config['slider_decel_steps'] = max(1, int(data['slider_decel_steps']))  # minimum 1 step
+        if 'slider_max_pulses' in data:
+            config['slider_max_pulses'] = max(1000, int(data['slider_max_pulses']))
+        if 'slider_max_move_seconds' in data:
+            config['slider_max_move_seconds'] = max(0.5, float(data['slider_max_move_seconds']))
         if 'rotary_speed' in data:
             config['rotary_speed'] = max(0, min(100, int(data['rotary_speed'])))  # clamp 0-100
         if 'rotary_accel_steps' in data:
@@ -440,8 +446,17 @@ def run_cycle_background(total_cycles):
         safe_set_app_state("system_message", "Positioning slider to OUT (MAX) position...")
         accel_steps = config.get('slider_accel_steps', 15)
         decel_steps = config.get('slider_decel_steps', 15)
+        slider_max_pulses = config.get('slider_max_pulses', 12000)
+        slider_max_move_seconds = config.get('slider_max_move_seconds', 3.0)
         ultra_fast = config['slider_out_speed'] > 75
-        out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+        out_ok = hw.slider_move_to_max(
+            config['slider_out_speed'],
+            max_pulses=slider_max_pulses,
+            accel_steps=accel_steps,
+            decel_steps=decel_steps,
+            ultra_fast=ultra_fast,
+            max_seconds=slider_max_move_seconds
+        )
         
         if not out_ok:
             safe_update_app_state({
@@ -556,7 +571,14 @@ def run_cycle_background(total_cycles):
                 
                 # Move slider MAX → MIN (during LightBurn job)
                 ultra_fast = config['slider_in_speed'] > 75
-                in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                in_ok = hw.slider_move_to_min(
+                    config['slider_in_speed'],
+                    max_pulses=slider_max_pulses,
+                    accel_steps=accel_steps,
+                    decel_steps=decel_steps,
+                    ultra_fast=ultra_fast,
+                    max_seconds=slider_max_move_seconds
+                )
                 
                 if not in_ok:
                     safe_update_app_state({
@@ -568,7 +590,14 @@ def run_cycle_background(total_cycles):
                 
                 # Move slider MIN → MAX (during LightBurn job)
                 ultra_fast = config['slider_out_speed'] > 75
-                out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                out_ok = hw.slider_move_to_max(
+                    config['slider_out_speed'],
+                    max_pulses=slider_max_pulses,
+                    accel_steps=accel_steps,
+                    decel_steps=decel_steps,
+                    ultra_fast=ultra_fast,
+                    max_seconds=slider_max_move_seconds
+                )
                 
                 if not out_ok:
                     safe_update_app_state({
@@ -695,7 +724,14 @@ def run_cycle_background(total_cycles):
                 
                 # Move slider IN (MAX → MIN) to try to load a key
                 ultra_fast = config['slider_in_speed'] > 75
-                in_ok = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                in_ok = hw.slider_move_to_min(
+                    config['slider_in_speed'],
+                    max_pulses=slider_max_pulses,
+                    accel_steps=accel_steps,
+                    decel_steps=decel_steps,
+                    ultra_fast=ultra_fast,
+                    max_seconds=slider_max_move_seconds
+                )
                 
                 if not in_ok:
                     safe_update_app_state({
@@ -707,7 +743,14 @@ def run_cycle_background(total_cycles):
                 
                 # Move slider OUT (MIN → MAX) 
                 ultra_fast = config['slider_out_speed'] > 75
-                out_ok = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+                out_ok = hw.slider_move_to_max(
+                    config['slider_out_speed'],
+                    max_pulses=slider_max_pulses,
+                    accel_steps=accel_steps,
+                    decel_steps=decel_steps,
+                    ultra_fast=ultra_fast,
+                    max_seconds=slider_max_move_seconds
+                )
                 
                 if not out_ok:
                     safe_update_app_state({
@@ -1238,11 +1281,20 @@ def api_slider_test_cycle():
         # Get current slider speeds and acceleration from config
         accel_steps = config.get('slider_accel_steps', 15)
         decel_steps = config.get('slider_decel_steps', 15)
+        slider_max_pulses = config.get('slider_max_pulses', 12000)
+        slider_max_move_seconds = config.get('slider_max_move_seconds', 3.0)
         
         # Step 1: Move to MIN limit switch
         safe_set_app_state("system_message", "Moving slider to MIN position...")
         ultra_fast = config['slider_in_speed'] > 75
-        min_success = hw.slider_move_to_min(config['slider_in_speed'], accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+        min_success = hw.slider_move_to_min(
+            config['slider_in_speed'],
+            max_pulses=slider_max_pulses,
+            accel_steps=accel_steps,
+            decel_steps=decel_steps,
+            ultra_fast=ultra_fast,
+            max_seconds=slider_max_move_seconds
+        )
         
         if not min_success:
             safe_set_app_state("system_message", "ERROR: Failed to reach MIN limit switch")
@@ -1252,7 +1304,14 @@ def api_slider_test_cycle():
         # Step 2: Move to MAX limit switch
         safe_set_app_state("system_message", "Moving slider to MAX position...")
         ultra_fast = config['slider_out_speed'] > 75
-        max_success = hw.slider_move_to_max(config['slider_out_speed'], max_pulses=50000, accel_steps=accel_steps, decel_steps=decel_steps, ultra_fast=ultra_fast)
+        max_success = hw.slider_move_to_max(
+            config['slider_out_speed'],
+            max_pulses=slider_max_pulses,
+            accel_steps=accel_steps,
+            decel_steps=decel_steps,
+            ultra_fast=ultra_fast,
+            max_seconds=slider_max_move_seconds
+        )
         
         if not max_success:
             safe_set_app_state("system_message", "ERROR: Failed to reach MAX limit switch")

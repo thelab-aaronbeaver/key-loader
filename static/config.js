@@ -35,6 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const inpOutSpeed = document.getElementById('slider_out_speed');
     const inpSliderAccel = document.getElementById('slider_accel_steps');
     const inpSliderDecel = document.getElementById('slider_decel_steps');
+    const inpSliderMaxPulses = document.getElementById('slider_max_pulses');
+    const inpSliderMaxMoveSeconds = document.getElementById('slider_max_move_seconds');
     const inpHomeOffset = document.getElementById('home_offset');
     const inpLaserIp = document.getElementById('laser_ip');
     const inpLightburnIp = document.getElementById('lightburn_ip');
@@ -593,6 +595,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inpOutSpeed) inpOutSpeed.value = cfg.slider_out_speed;
             if (inpSliderAccel) inpSliderAccel.value = cfg.slider_accel_steps || 15;
             if (inpSliderDecel) inpSliderDecel.value = cfg.slider_decel_steps || 15;
+            if (inpSliderMaxPulses) inpSliderMaxPulses.value = cfg.slider_max_pulses || 12000;
+            if (inpSliderMaxMoveSeconds) inpSliderMaxMoveSeconds.value = cfg.slider_max_move_seconds || 3.0;
             if (inpHomeOffset) inpHomeOffset.value = cfg.home_offset || 0.0;
             if (inpLaserIp) inpLaserIp.value = cfg.udp_ip || '192.168.1.170';
             if (inpLightburnIp) inpLightburnIp.value = cfg.lightburn_ip || '192.168.1.170';
@@ -630,6 +634,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         slider_out_speed: parseInt(inpOutSpeed?.value || 80, 10),
                         slider_accel_steps: parseInt(inpSliderAccel?.value || 15, 10),
                         slider_decel_steps: parseInt(inpSliderDecel?.value || 15, 10),
+                        slider_max_pulses: parseInt(inpSliderMaxPulses?.value || 12000, 10),
+                        slider_max_move_seconds: parseFloat(inpSliderMaxMoveSeconds?.value || 3.0),
                         home_offset: parseFloat(inpHomeOffset?.value || 0.0),
                         udp_ip: inpLaserIp?.value || '192.168.1.170',
                         lightburn_ip: inpLightburnIp?.value || '192.168.1.170',

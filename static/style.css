@@ -90,7 +90,7 @@ h2 {
 }
 
 .indicator_config {
-    width: 50px;
+    width: 80px;
     height: 20px;
     border-radius: 10px;
     background-color: var(--border-color);
@@ -175,7 +175,7 @@ button:disabled {
 
 /* Config page */
 .container {
-    max-width: 800px;
+    max-width: 80%;
     margin: 0 auto;
     padding: 20px;
 }
@@ -477,4 +477,29 @@ a {
     input[type="number"] {
         width: 100%;
     }
+}
+
+.card-toggle-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.card-toggle-header h2 {
+    margin: 0;
+}
+
+.card-content-collapsed {
+    display: none;
+}
+
+.btn-toggle {
+    width: auto;
+    border-radius: 6px;
+    background-color: var(--button-color);
+    color: var(--text-accent-color);
+    flex-grow: 0;
+
 }
