@@ -13,7 +13,7 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 │  GPIO PIN ASSIGNMENT SUMMARY (BCM Numbering)                     │
 ├──────────────────────────────────────────────────────────────────┤
 │  GPIO 4  → Slider MIN Limit Switch (input)                      │
-│  GPIO 5  → Key Catcher HOME Limit Switch (input)                │
+│  GPIO 18 → Key Catcher HOME Limit Switch (input)                │
 │  GPIO 6  → Key Catcher MAX/PAUSE Limit Switch (input)           │
 │  GPIO 7  → Legacy Home Switch - optional (input)                │
 │  GPIO 8  → Legacy End Switch - optional (input)                 │
@@ -32,7 +32,7 @@ Your phantom limit switch triggers are likely caused by ground loops between the
 │  GPIO 27 → Hall Sensor (home detection, input)                  │
 └──────────────────────────────────────────────────────────────────┘
 
-Available for future use: GPIO 9, 10, 11, 14, 15, 18
+Available for future use: GPIO 5, 9, 10, 11, 14, 15
 ```
 
 ---
@@ -75,7 +75,7 @@ Available for future use: GPIO 9, 10, 11, 14, 15, 18
 | **Limit Switches (896F)** | | | |
 | Slider MIN | 4 | Slider inward limit | ✅ **UPDATED** |
 | Slider MAX | 17 | Slider outward limit | |
-| Key Catcher HOME | 5 | Key catcher home position | ✅ **UPDATED** |
+| Key Catcher HOME | 18 | Key catcher home position | ✅ **UPDATED** |
 | Key Catcher MAX | 6 | Key catcher pause/stop position | ✅ **UPDATED** |
 | Legacy Home Switch | 7 | Legacy rotary home (optional) | |
 | Legacy End Switch | 8 | Legacy rotary end (optional) | |
@@ -108,7 +108,7 @@ Available for future use: GPIO 9, 10, 11, 14, 15, 18
     │            │                                   │
     │  GPIO 4  ──┤  SLIDER MIN SWITCH (896F)         │
     │  GPIO 17 ──┤  SLIDER MAX SWITCH (896F)         │
-    │  GPIO 5  ──┤  KEY CATCHER HOME SWITCH (896F)   │
+    │  GPIO 18 ──┤  KEY CATCHER HOME SWITCH (896F)   │
     │  GPIO 6  ──┤  KEY CATCHER MAX SWITCH (896F)    │
     │  GPIO 7  ──┤  LEGACY HOME SWITCH (optional)     │
     │  GPIO 8  ──┤  LEGACY END SWITCH (optional)      │
@@ -171,7 +171,7 @@ Available for future use: GPIO 9, 10, 11, 14, 15, 18
     │  ┌────────────────────────────────────────┐ │
     │  │ Slider MIN ── GPIO 4                   │ │
     │  │ Slider MAX ── GPIO 17                  │ │
-    │  │ Key HOME ── GPIO 5                     │ │
+    │  │ Key HOME ── GPIO 18                    │ │
     │  │ Key MAX ── GPIO 6                      │ │
     │  │ Legacy Home ── GPIO 7 (optional)       │ │
     │  │ Legacy End ── GPIO 8 (optional)        │ │
@@ -207,6 +207,10 @@ External 12V Supply:
 - **Current**: Set for 3.0Nm motor (typically 2.5-3.0A)
 - **Enable Logic**: LOW = enabled, HIGH = disabled
 - **Alarm Logic**: HIGH = OK, LOW = fault
+- **Direction Control**:
+  - `GPIO 21` drives `DIR+` (with `DIR-` tied to GND)
+  - Use **Process Settings → Flip Rotary Direction** to invert motion in software
+  - Use `POST /api/rotary/dir_test` (or **Test DIR Signal** button on Config page) to verify DIR toggles at the driver
 
 ### **MKS SERVO42C Driver (Slider Motor) Configuration:**
 - **Power**: 12V from DROK supply (reduced from 24V)
@@ -220,7 +224,7 @@ External 12V Supply:
 ### **MKS SERVO42C Driver (Key Catcher Motor) Configuration:**
 - **Power**: 12V from External Power Supply
 - **GPIO Pins**: STEP=26, DIR=19, ENABLE=13
-- **Limit Switches**: HOME=GPIO 5, MAX/PAUSE=GPIO 6
+- **Limit Switches**: HOME=GPIO 18, MAX/PAUSE=GPIO 6
 - **Microstepping**: 4x (800 steps/revolution) - **BALANCED FOR 12V**
 - **Current**: Set for motor rating (typically 1.0-2.0A)
 - **Enable Logic**: LOW = enabled, HIGH = disabled
@@ -229,7 +233,7 @@ External 12V Supply:
 - **Function**: Moves key catching tray after each key is processed
 - **Operation**: 
   - Moves configurable steps per key (default: 80 steps)
-  - Homes to GPIO 5 (HOME limit switch) at start
+  - Homes to GPIO 18 (HOME limit switch) at start
   - Pauses at GPIO 6 (MAX limit switch) when limit switch is triggered
   - Returns to home position when user resumes after key removal
 - **Test Cycle**: Full test available in config page (Home → Pause → Home)
@@ -281,7 +285,7 @@ Components needed:
 896F Switch Connections:
 ├── Slider MIN ── GPIO 4 (COM) + 5V (NO) + GND
 ├── Slider MAX ── GPIO 17 (COM) + 5V (NO) + GND
-├── Key Catcher HOME ── GPIO 5 (COM) + 5V (NO) + GND
+├── Key Catcher HOME ── GPIO 18 (COM) + 5V (NO) + GND
 ├── Key Catcher MAX ── GPIO 6 (COM) + 5V (NO) + GND
 ├── Legacy Home ── GPIO 7 (COM) + 5V (NO) + GND (optional)
 └── Legacy End ── GPIO 8 (COM) + 5V (NO) + GND (optional)

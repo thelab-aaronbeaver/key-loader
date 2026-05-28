@@ -39,6 +39,8 @@ app_state = {
     "total_cycles": 0,
     # --- ADDED: Stop cycle flag ---
     "stop_requested": False,
+    "pause_requested": False,
+    "is_paused": False,
     # --- ADDED: Background thread reference ---
     "cycle_thread": None,
     # --- ADDED: Emergency stop state ---
@@ -493,6 +495,36 @@ def run_cycle_background(total_cycles):
             if current_state["stop_requested"]:
                 safe_set_app_state("system_message", "Cycle stopped by user request.")
                 break
+
+            # Check for pause request
+            if current_state.get("pause_requested", False):
+                safe_update_app_state({
+                    "is_paused": True,
+                    "system_message": "Cycle paused. Click Resume to continue."
+                })
+                emit_status_update()
+                print("⏸️ Cycle paused by user.")
+
+                while True:
+                    current_state = safe_get_app_state()
+                    if current_state["emergency_stop"] or current_state["stop_requested"]:
+                        break
+                    if not current_state.get("pause_requested", False):
+                        safe_update_app_state({
+                            "is_paused": False,
+                            "system_message": "Cycle resumed. Continuing..."
+                        })
+                        emit_status_update()
+                        print("▶️ Cycle resumed by user.")
+                        break
+                    time.sleep(0.2)
+
+                if current_state["emergency_stop"]:
+                    safe_set_app_state("system_message", "🚨 EMERGENCY STOP ACTIVATED! Cycle terminated immediately.")
+                    break
+                if current_state["stop_requested"]:
+                    safe_set_app_state("system_message", "Cycle stopped by user request.")
+                    break
             
             # Step 1: Rotary is now at current_position (either from homing or from previous move)
             # Wait a brief moment for rotary to settle and sensor to stabilize
@@ -758,6 +790,7 @@ def run_cycle_background(total_cycles):
         # Now reset the cycle state
         safe_update_app_state({
             "is_running": False,
+            "is_paused": False,
             "current_cycle": 0,
             "total_cycles": 0,
             "cycle_thread": None
@@ -832,10 +865,43 @@ def stop_cycle():
     
     safe_update_app_state({
         "stop_requested": True,
+        "pause_requested": False,
+        "is_paused": False,
         "system_message": "Stop requested. Cycle will stop at next safe point..."
     })
     emit_status_update()
     return jsonify({"message": "Stop requested"})
+
+@app.route('/api/cycle/pause', methods=['POST'])
+def pause_cycle():
+    current_state = safe_get_app_state()
+    if not current_state["is_running"]:
+        return jsonify({"error": "No cycle is currently running."}), 400
+    if current_state.get("is_paused", False):
+        return jsonify({"error": "Cycle is already paused."}), 400
+
+    safe_update_app_state({
+        "pause_requested": True,
+        "system_message": "Pause requested. Cycle will pause at next safe point..."
+    })
+    emit_status_update()
+    return jsonify({"message": "Pause requested"})
+
+@app.route('/api/cycle/resume', methods=['POST'])
+def resume_cycle():
+    current_state = safe_get_app_state()
+    if not current_state["is_running"]:
+        return jsonify({"error": "No cycle is currently running."}), 400
+    if not current_state.get("pause_requested", False):
+        return jsonify({"error": "Cycle is not paused."}), 400
+
+    safe_update_app_state({
+        "pause_requested": False,
+        "is_paused": False,
+        "system_message": "Resume requested..."
+    })
+    emit_status_update()
+    return jsonify({"message": "Resume requested"})
 
 # --- ADDED: Emergency Stop Route ---
 @app.route('/api/emergency_stop', methods=['POST'])
@@ -844,6 +910,8 @@ def emergency_stop():
     safe_update_app_state({
         "emergency_stop": True,
         "stop_requested": True,
+        "pause_requested": False,
+        "is_paused": False,
         "is_running": False,
         "system_message": "🚨 EMERGENCY STOP ACTIVATED! All motion halted immediately. Check system before restarting.",
         "current_cycle": 0,
@@ -871,6 +939,8 @@ def emergency_stop_reset():
     safe_update_app_state({
         "emergency_stop": False,
         "stop_requested": False,
+        "pause_requested": False,
+        "is_paused": False,
         "system_message": "Emergency stop reset. System ready for normal operation."
     })
     emit_status_update()
@@ -975,7 +1045,9 @@ def start_cycle():
         "current_angle": 0,
         "current_cycle": 0,
         "total_cycles": total_cycles,
-        "stop_requested": False  # Reset stop flag
+        "stop_requested": False,  # Reset stop flag
+        "pause_requested": False,
+        "is_paused": False
     })
 
     # Start the cycle in a background thread

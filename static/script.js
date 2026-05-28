@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const startButton = document.getElementById('start-button');
+    const pauseButton = document.getElementById('pause-button');
     const homeButton = document.getElementById('home-button');
     const resumeButton = document.getElementById('resume-button');
     const emergencyStopButton = document.getElementById('emergency-stop-button');
@@ -72,6 +73,28 @@ document.addEventListener('DOMContentLoaded', function () {
                 } catch (e) {
                     // no-op; errors reflected via /api/status polling
                 }
+            }
+        });
+    }
+
+    if (pauseButton) {
+        pauseButton.addEventListener('click', async () => {
+            const shouldResume = pauseButton.textContent === 'Resume Cycle';
+            if (messageDisplay) {
+                messageDisplay.textContent = shouldResume ? 'Resuming cycle...' : 'Pausing cycle...';
+            }
+
+            try {
+                const endpoint = shouldResume ? '/api/cycle/resume' : '/api/cycle/pause';
+                const response = await fetch(endpoint, { method: 'POST' });
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    if (messageDisplay) {
+                        messageDisplay.textContent = data.error || data.message || 'Pause/Resume request failed';
+                    }
+                }
+            } catch (e) {
+                if (messageDisplay) messageDisplay.textContent = 'Pause/Resume error: ' + e.message;
             }
         });
     }
@@ -235,6 +258,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 startButton.textContent = 'Start Cycle';
                 startButton.disabled = !data.is_homed; // Disable if not homed
                 startButton.className = 'btn-move'; // Reset to normal styling
+            }
+        }
+
+        if (pauseButton) {
+            if (data.emergency_stop || !data.is_running) {
+                pauseButton.style.display = 'none';
+            } else {
+                pauseButton.style.display = 'inline-block';
+                if (data.is_paused || data.pause_requested) {
+                    pauseButton.textContent = 'Resume Cycle';
+                    pauseButton.className = 'btn-move';
+                } else {
+                    pauseButton.textContent = 'Pause Cycle';
+                    pauseButton.className = 'btn-back';
+                }
             }
         }
 
