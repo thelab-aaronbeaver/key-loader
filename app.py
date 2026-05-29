@@ -9,6 +9,7 @@ import json
 import os
 import threading
 import socket
+from datetime import datetime
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'key_loader_secret_key_2024'
@@ -53,6 +54,18 @@ app_state = {
 
 # --- ADDED: Runtime configuration with JSON persistence ---
 CONFIG_FILE = "config.json"
+JOB_REPORT_FILE = "job_reports.txt"
+KEY_CATCHER_MM_PER_100_STEPS = 3.75
+KEY_CATCHER_MM_PER_STEP = KEY_CATCHER_MM_PER_100_STEPS / 100.0
+KEY_CATCHER_STEPS_PER_MM = 1.0 / KEY_CATCHER_MM_PER_STEP
+
+def key_catcher_mm_to_steps(mm):
+    """Convert key catcher travel in millimeters to integer motor steps."""
+    return max(0, int(round(float(mm) * KEY_CATCHER_STEPS_PER_MM)))
+
+def key_catcher_steps_to_mm(steps):
+    """Convert key catcher motor steps to millimeters."""
+    return float(steps) * KEY_CATCHER_MM_PER_STEP
 
 def load_config():
     """Load configuration from JSON file, create default if not exists."""
@@ -84,7 +97,7 @@ def load_config():
         "lightburn_max_wait": 300,        # Max wait for job completion (5 min)
         "use_lightburn_status": True,     # Use status monitoring vs pause timer
         "key_catcher_enabled": True,      # enable key catcher motor
-        "key_catcher_steps_per_key": 80,  # steps to move per key detected
+        "key_catcher_mm_per_key": 3.0,    # millimeters to move per key detected
         "key_catcher_speed": 80,          # 0-100 speed scale for key catcher motor
         "key_catcher_start_position": 0,  # starting position in steps (controlled by HOME limit switch GPIO 6)
         "key_catcher_pause_position": 4000,  # pause position in steps (controlled by MAX limit switch GPIO 5)
@@ -95,6 +108,11 @@ def load_config():
         try:
             with open(CONFIG_FILE, 'r') as f:
                 loaded_config = json.load(f)
+                # Backward compatibility: migrate old steps-per-key config to mm-per-key.
+                if 'key_catcher_mm_per_key' not in loaded_config and 'key_catcher_steps_per_key' in loaded_config:
+                    loaded_config['key_catcher_mm_per_key'] = key_catcher_steps_to_mm(
+                        loaded_config['key_catcher_steps_per_key']
+                    )
                 # Merge with defaults to handle missing keys
                 default_config.update(loaded_config)
                 return default_config
@@ -160,6 +178,33 @@ def save_config(config_dict):
     except IOError as e:
         print(f"Error saving config: {e}")
         return False
+
+def append_job_report(total_cycles, keys_processed, cycle_duration, completed=True):
+    """Append a completed job report entry to a text file."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    avg_per_key = (cycle_duration / keys_processed) if keys_processed > 0 else 0.0
+    status = "COMPLETED" if completed else "NOT_COMPLETED"
+
+    report_lines = [
+        "=" * 72,
+        f"Job Timestamp: {timestamp}",
+        f"Status: {status}",
+        f"Requested Keys: {total_cycles}",
+        f"Processed Keys: {keys_processed}",
+        f"Total Duration: {cycle_duration:.2f}s",
+        f"Average Per Key: {avg_per_key:.2f}s",
+        "-" * 72,
+        f"Rotary Speed: {config.get('rotary_speed')}",
+        f"Slider In/Out Speed: {config.get('slider_in_speed')}/{config.get('slider_out_speed')}",
+        f"Key Catcher Enabled: {config.get('key_catcher_enabled')}",
+        "",
+    ]
+
+    try:
+        with open(JOB_REPORT_FILE, "a", encoding="utf-8") as f:
+            f.write("\n".join(report_lines))
+    except Exception as e:
+        print(f"⚠️ Failed to write job report: {e}")
 
 # Load initial config
 config = load_config()
@@ -385,8 +430,14 @@ def api_set_config():
         # Key catcher configuration
         if 'key_catcher_enabled' in data:
             config['key_catcher_enabled'] = bool(data['key_catcher_enabled'])
+        if 'key_catcher_mm_per_key' in data:
+            config['key_catcher_mm_per_key'] = max(0.1, float(data['key_catcher_mm_per_key']))
         if 'key_catcher_steps_per_key' in data:
-            config['key_catcher_steps_per_key'] = int(data['key_catcher_steps_per_key'])
+            # Backward compatibility for older clients still posting steps.
+            config['key_catcher_mm_per_key'] = max(
+                0.1,
+                key_catcher_steps_to_mm(int(data['key_catcher_steps_per_key']))
+            )
         if 'key_catcher_speed' in data:
             config['key_catcher_speed'] = max(0, min(100, int(data['key_catcher_speed'])))
         if 'key_catcher_start_position' in data:
@@ -658,10 +709,11 @@ def run_cycle_background(total_cycles):
                 if config.get('key_catcher_enabled', True):
                     safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Moving key catcher...")
                     
-                    steps_per_key = config.get('key_catcher_steps_per_key', 80)
+                    mm_per_key = config.get('key_catcher_mm_per_key', 3.0)
+                    steps_per_key = key_catcher_mm_to_steps(mm_per_key)
                     key_catcher_speed = config.get('key_catcher_speed', 80)
                     
-                    # Move key catcher by configured steps
+                    # Move key catcher by configured mm (converted to steps).
                     catcher_success = hw.key_catcher_move_steps(steps_per_key, key_catcher_speed)
                     
                     if catcher_success:
@@ -670,7 +722,11 @@ def run_cycle_background(total_cycles):
                         keys_since_reset = hw.key_catcher_keys_processed
                         safe_set_app_state("key_catcher_keys_since_reset", keys_since_reset)
                         
-                        print(f"🔧 Key catcher moved {steps_per_key} steps. Keys since reset: {keys_since_reset}")
+                        print(
+                            f"🔧 Key catcher moved {steps_per_key} steps "
+                            f"(~{key_catcher_steps_to_mm(steps_per_key):.2f} mm). "
+                            f"Keys since reset: {keys_since_reset}"
+                        )
                         
                         # Check if MAX limit switch is triggered (tray is full)
                         if hw.read_key_catcher_max():
@@ -826,6 +882,7 @@ def run_cycle_background(total_cycles):
                         break
                 
                 safe_set_app_state("system_message", f"Cycle complete. Processed {keys_processed} keys in {cycle_duration:.1f}s. 2 additional steps complete. Ready.")
+                append_job_report(total_cycles, keys_processed, cycle_duration, completed=True)
             
         # Emit final status update BEFORE resetting the cycle counters
         emit_status_update()

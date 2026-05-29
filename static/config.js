@@ -1,4 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const KEY_CATCHER_MM_PER_STEP = 3.75 / 100.0;
+
+    function keyCatcherStepsToMm(steps) {
+        return Number(steps || 0) * KEY_CATCHER_MM_PER_STEP;
+    }
+
+    function keyCatcherMmToSteps(mm) {
+        return Math.max(0, Math.round(Number(mm || 0) / KEY_CATCHER_MM_PER_STEP));
+    }
+
     // Initialize WebSocket connection with error handling
     let socket;
     try {
@@ -60,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const spanKeyCatcherKeys = document.getElementById('key-catcher-keys');
     const keyCatcherStatus = document.getElementById('key-catcher-status');
     const inpKeyCatcherEnabled = document.getElementById('key_catcher_enabled');
-    const inpKeyCatcherStepsPerKey = document.getElementById('key_catcher_steps_per_key');
+    const inpKeyCatcherMmPerKey = document.getElementById('key_catcher_mm_per_key');
     const inpKeyCatcherSpeed = document.getElementById('key_catcher_speed');
 
     function setBusy(b) {
@@ -389,14 +399,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Key catcher button handlers
     if (btnKeyCatcherMove && inpKeyCatcherSteps) {
         btnKeyCatcherMove.addEventListener('click', async () => {
-            const steps = parseInt(inpKeyCatcherSteps.value) || 0;
-            if (keyCatcherStatus) keyCatcherStatus.textContent = `Moving ${steps} steps...`;
-            if (msg) msg.textContent = `Moving key catcher ${steps} steps...`;
+            const mm = parseFloat(inpKeyCatcherSteps.value) || 0;
+            const steps = keyCatcherMmToSteps(mm);
+            if (keyCatcherStatus) keyCatcherStatus.textContent = `Moving ${mm.toFixed(2)} mm...`;
+            if (msg) msg.textContent = `Moving key catcher ${mm.toFixed(2)} mm (${steps} steps)...`;
             setBusy(true);
             try {
                 const data = await postJSON('/api/key_catcher/move_steps', { steps: steps });
                 if (data.success) {
-                    if (spanKeyCatcherPosition) spanKeyCatcherPosition.textContent = data.position;
+                    if (spanKeyCatcherPosition) spanKeyCatcherPosition.textContent = keyCatcherStepsToMm(data.position).toFixed(2);
                     if (keyCatcherStatus) keyCatcherStatus.textContent = 'Complete';
                 } else {
                     if (keyCatcherStatus) keyCatcherStatus.textContent = 'Failed';
@@ -414,14 +425,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnKeyCatcherGoto && inpKeyCatcherTarget) {
         btnKeyCatcherGoto.addEventListener('click', async () => {
-            const target = parseInt(inpKeyCatcherTarget.value) || 0;
-            if (keyCatcherStatus) keyCatcherStatus.textContent = `Moving to position ${target}...`;
-            if (msg) msg.textContent = `Moving key catcher to position ${target}...`;
+            const targetMm = parseFloat(inpKeyCatcherTarget.value) || 0;
+            const target = keyCatcherMmToSteps(targetMm);
+            if (keyCatcherStatus) keyCatcherStatus.textContent = `Moving to ${targetMm.toFixed(2)} mm...`;
+            if (msg) msg.textContent = `Moving key catcher to ${targetMm.toFixed(2)} mm (${target} steps)...`;
             setBusy(true);
             try {
                 const data = await postJSON('/api/key_catcher/move_to_position', { position: target });
                 if (data.success) {
-                    if (spanKeyCatcherPosition) spanKeyCatcherPosition.textContent = data.position;
+                    if (spanKeyCatcherPosition) spanKeyCatcherPosition.textContent = keyCatcherStepsToMm(data.position).toFixed(2);
                     if (keyCatcherStatus) keyCatcherStatus.textContent = 'Complete';
                 } else {
                     if (keyCatcherStatus) keyCatcherStatus.textContent = 'Failed';
@@ -445,7 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const data = await postJSON('/api/key_catcher/reset');
                 if (data.success) {
-                    if (spanKeyCatcherPosition) spanKeyCatcherPosition.textContent = data.position;
+                    if (spanKeyCatcherPosition) spanKeyCatcherPosition.textContent = keyCatcherStepsToMm(data.position).toFixed(2);
                     if (spanKeyCatcherKeys) spanKeyCatcherKeys.textContent = '0';
                     if (keyCatcherStatus) keyCatcherStatus.textContent = 'Reset Complete';
                 } else {
@@ -467,7 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/key_catcher/get_position');
             const data = await res.json();
             if (data.success) {
-                if (spanKeyCatcherPosition) spanKeyCatcherPosition.textContent = data.position;
+                if (spanKeyCatcherPosition) spanKeyCatcherPosition.textContent = keyCatcherStepsToMm(data.position).toFixed(2);
                 if (spanKeyCatcherKeys) spanKeyCatcherKeys.textContent = data.keys_processed;
             }
         } catch (e) {
@@ -605,7 +617,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Key catcher config
             if (inpKeyCatcherEnabled) inpKeyCatcherEnabled.checked = cfg.key_catcher_enabled !== false;
-            if (inpKeyCatcherStepsPerKey) inpKeyCatcherStepsPerKey.value = cfg.key_catcher_steps_per_key || 80;
+            if (inpKeyCatcherMmPerKey) {
+                const mmPerKey = (cfg.key_catcher_mm_per_key !== undefined)
+                    ? cfg.key_catcher_mm_per_key
+                    : keyCatcherStepsToMm(cfg.key_catcher_steps_per_key || 80);
+                inpKeyCatcherMmPerKey.value = Number(mmPerKey).toFixed(2);
+            }
             if (inpKeyCatcherSpeed) inpKeyCatcherSpeed.value = cfg.key_catcher_speed || 80;
 
             // Update key catcher position
@@ -642,7 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         lightburn_max_wait: parseInt(inpLightburnMaxWait?.value || 300, 10),
                         use_lightburn_status: inpUseLightburnStatus?.checked !== false,
                         key_catcher_enabled: inpKeyCatcherEnabled?.checked !== false,
-                        key_catcher_steps_per_key: parseInt(inpKeyCatcherStepsPerKey?.value || 80, 10),
+                        key_catcher_mm_per_key: parseFloat(inpKeyCatcherMmPerKey?.value || 3.0),
                         key_catcher_speed: parseInt(inpKeyCatcherSpeed?.value || 80, 10)
                     })
                 });
