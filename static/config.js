@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const inpOutSpeed = document.getElementById('slider_out_speed');
     const inpSliderAccel = document.getElementById('slider_accel_steps');
     const inpSliderDecel = document.getElementById('slider_decel_steps');
+    const inpSliderSafetyEnabled = document.getElementById('slider_safety_enabled');
     const inpSliderMaxPulses = document.getElementById('slider_max_pulses');
     const inpSliderMaxMoveSeconds = document.getElementById('slider_max_move_seconds');
     const inpHomeOffset = document.getElementById('home_offset');
@@ -607,6 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inpOutSpeed) inpOutSpeed.value = cfg.slider_out_speed;
             if (inpSliderAccel) inpSliderAccel.value = cfg.slider_accel_steps || 15;
             if (inpSliderDecel) inpSliderDecel.value = cfg.slider_decel_steps || 15;
+            if (inpSliderSafetyEnabled) inpSliderSafetyEnabled.checked = cfg.slider_safety_enabled !== false;
             if (inpSliderMaxPulses) inpSliderMaxPulses.value = cfg.slider_max_pulses || 12000;
             if (inpSliderMaxMoveSeconds) inpSliderMaxMoveSeconds.value = cfg.slider_max_move_seconds || 3.0;
             if (inpHomeOffset) inpHomeOffset.value = cfg.home_offset || 0.0;
@@ -651,6 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         slider_out_speed: parseInt(inpOutSpeed?.value || 80, 10),
                         slider_accel_steps: parseInt(inpSliderAccel?.value || 15, 10),
                         slider_decel_steps: parseInt(inpSliderDecel?.value || 15, 10),
+                        slider_safety_enabled: inpSliderSafetyEnabled?.checked !== false,
                         slider_max_pulses: parseInt(inpSliderMaxPulses?.value || 12000, 10),
                         slider_max_move_seconds: parseFloat(inpSliderMaxMoveSeconds?.value || 3.0),
                         home_offset: parseFloat(inpHomeOffset?.value || 0.0),

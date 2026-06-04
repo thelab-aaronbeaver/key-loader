@@ -76,6 +76,7 @@ def load_config():
         "slider_out_speed": 80,     # 0-100 speed scale (0=stopped, 100=SERVO42C max rated RPM)
         "slider_accel_steps": 15,   # steps for slider acceleration ramp-up - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
         "slider_decel_steps": 15,   # steps for slider deceleration ramp-down - OPTIMIZED for SERVO42C 12V (800 pulses/rev)
+        "slider_safety_enabled": True,  # pulse/time safety limits for slider moves
         "slider_max_pulses": 12000, # safety cap: max pulses per slider move before bind trip
         "slider_max_move_seconds": 3.0,  # safety cap: max seconds per slider move before bind trip
         "rotary_speed": 100,        # 0-100 speed scale for rotary motor - MAXIMUM SPEED
@@ -212,6 +213,18 @@ config = load_config()
 def apply_rotary_direction(degrees):
     """Apply configured rotary direction inversion to a degree command."""
     return -degrees if config.get("flip_rotary_direction", False) else degrees
+
+def get_slider_safety_limits():
+    """
+    Return (max_pulses, max_seconds) for slider moves.
+    When safety is disabled, use a high pulse cap and no time cap so moves rely on limit switches only.
+    """
+    if config.get("slider_safety_enabled", True):
+        return (
+            config.get("slider_max_pulses", 12000),
+            config.get("slider_max_move_seconds", 3.0),
+        )
+    return (50000, None)
 
 # Initialize LightBurn controller
 lb_controller = None
@@ -388,6 +401,8 @@ def api_set_config():
             config['slider_max_pulses'] = max(1000, int(data['slider_max_pulses']))
         if 'slider_max_move_seconds' in data:
             config['slider_max_move_seconds'] = max(0.5, float(data['slider_max_move_seconds']))
+        if 'slider_safety_enabled' in data:
+            config['slider_safety_enabled'] = bool(data['slider_safety_enabled'])
         if 'rotary_speed' in data:
             config['rotary_speed'] = max(0, min(100, int(data['rotary_speed'])))  # clamp 0-100
         if 'rotary_accel_steps' in data:
@@ -497,8 +512,7 @@ def run_cycle_background(total_cycles):
         safe_set_app_state("system_message", "Positioning slider to OUT (MAX) position...")
         accel_steps = config.get('slider_accel_steps', 15)
         decel_steps = config.get('slider_decel_steps', 15)
-        slider_max_pulses = config.get('slider_max_pulses', 12000)
-        slider_max_move_seconds = config.get('slider_max_move_seconds', 3.0)
+        slider_max_pulses, slider_max_move_seconds = get_slider_safety_limits()
         ultra_fast = config['slider_out_speed'] > 75
         out_ok = hw.slider_move_to_max(
             config['slider_out_speed'],
@@ -621,6 +635,7 @@ def run_cycle_background(total_cycles):
                 safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. LightBurn running - performing slider movements...")
                 
                 # Move slider MAX → MIN (during LightBurn job)
+                slider_max_pulses, slider_max_move_seconds = get_slider_safety_limits()
                 ultra_fast = config['slider_in_speed'] > 75
                 in_ok = hw.slider_move_to_min(
                     config['slider_in_speed'],
@@ -640,6 +655,7 @@ def run_cycle_background(total_cycles):
                     return
                 
                 # Move slider MIN → MAX (during LightBurn job)
+                slider_max_pulses, slider_max_move_seconds = get_slider_safety_limits()
                 ultra_fast = config['slider_out_speed'] > 75
                 out_ok = hw.slider_move_to_max(
                     config['slider_out_speed'],
@@ -779,6 +795,7 @@ def run_cycle_background(total_cycles):
                 safe_set_app_state("system_message", f"No key at position {current_position} ({target_angle}°). Attempting to load key...")
                 
                 # Move slider IN (MAX → MIN) to try to load a key
+                slider_max_pulses, slider_max_move_seconds = get_slider_safety_limits()
                 ultra_fast = config['slider_in_speed'] > 75
                 in_ok = hw.slider_move_to_min(
                     config['slider_in_speed'],
@@ -798,6 +815,7 @@ def run_cycle_background(total_cycles):
                     return
                 
                 # Move slider OUT (MIN → MAX) 
+                slider_max_pulses, slider_max_move_seconds = get_slider_safety_limits()
                 ultra_fast = config['slider_out_speed'] > 75
                 out_ok = hw.slider_move_to_max(
                     config['slider_out_speed'],
@@ -1338,8 +1356,7 @@ def api_slider_test_cycle():
         # Get current slider speeds and acceleration from config
         accel_steps = config.get('slider_accel_steps', 15)
         decel_steps = config.get('slider_decel_steps', 15)
-        slider_max_pulses = config.get('slider_max_pulses', 12000)
-        slider_max_move_seconds = config.get('slider_max_move_seconds', 3.0)
+        slider_max_pulses, slider_max_move_seconds = get_slider_safety_limits()
         
         # Step 1: Move to MIN limit switch
         safe_set_app_state("system_message", "Moving slider to MIN position...")
