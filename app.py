@@ -49,12 +49,16 @@ app_state = {
     # --- ADDED: Key catcher state ---
     "key_catcher_paused": False,
     "key_catcher_position": 0,
-    "key_catcher_keys_since_reset": 0
+    "key_catcher_keys_since_reset": 0,
+    # Rotary step tracking (from Set Home / calibrated step 0)
+    "rotary_current_steps": 0,
+    "job_steps_used": 0
 }
 
 # --- ADDED: Runtime configuration with JSON persistence ---
 CONFIG_FILE = "config.json"
 JOB_REPORT_FILE = "job_reports.txt"
+STEP_LOG_FILE = "step_log.txt"
 KEY_CATCHER_MM_PER_100_STEPS = 3.75
 KEY_CATCHER_MM_PER_STEP = KEY_CATCHER_MM_PER_100_STEPS / 100.0
 KEY_CATCHER_STEPS_PER_MM = 1.0 / KEY_CATCHER_MM_PER_STEP
@@ -180,7 +184,7 @@ def save_config(config_dict):
         print(f"Error saving config: {e}")
         return False
 
-def append_job_report(total_cycles, keys_processed, cycle_duration, completed=True):
+def append_job_report(total_cycles, keys_processed, cycle_duration, completed=True, job_steps_used=0):
     """Append a completed job report entry to a text file."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     avg_per_key = (cycle_duration / keys_processed) if keys_processed > 0 else 0.0
@@ -192,6 +196,7 @@ def append_job_report(total_cycles, keys_processed, cycle_duration, completed=Tr
         f"Status: {status}",
         f"Requested Keys: {total_cycles}",
         f"Processed Keys: {keys_processed}",
+        f"Rotary Steps Used: {job_steps_used}",
         f"Total Duration: {cycle_duration:.2f}s",
         f"Average Per Key: {avg_per_key:.2f}s",
         "-" * 72,
@@ -206,6 +211,41 @@ def append_job_report(total_cycles, keys_processed, cycle_duration, completed=Tr
             f.write("\n".join(report_lines))
     except Exception as e:
         print(f"⚠️ Failed to write job report: {e}")
+
+def log_step_event(event, steps=None, detail=""):
+    """Append a step reference event to the step log file."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"{timestamp} | {event}"
+    if steps is not None:
+        line += f" | steps={steps}"
+    if detail:
+        line += f" | {detail}"
+    try:
+        with open(STEP_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception as e:
+        print(f"⚠️ Failed to write step log: {e}")
+
+def sync_rotary_steps_to_state():
+    """Sync hardware rotary step counter into app_state."""
+    safe_set_app_state("rotary_current_steps", hw.rotary_current_steps)
+
+def rotary_move_degrees(degrees, speed=None, accel_steps=None, decel_steps=None, count_for_job=False):
+    """Move rotary motor and update step counters in app_state."""
+    ok = hw.move_degrees(
+        degrees,
+        speed=speed if speed is not None else config['rotary_speed'],
+        accel_steps=accel_steps if accel_steps is not None else config['rotary_accel_steps'],
+        decel_steps=decel_steps if decel_steps is not None else config['rotary_decel_steps'],
+    )
+    if ok:
+        updates = {"rotary_current_steps": hw.rotary_current_steps}
+        if count_for_job:
+            steps_moved = hw.degrees_to_steps(degrees)
+            current = safe_get_app_state()
+            updates["job_steps_used"] = current.get("job_steps_used", 0) + steps_moved
+        safe_update_app_state(updates)
+    return ok
 
 # Load initial config
 config = load_config()
@@ -225,6 +265,57 @@ def get_slider_safety_limits():
             config.get("slider_max_move_seconds", 3.0),
         )
     return (50000, None)
+
+def perform_full_reset():
+    """
+    Full reset: home key catcher to HOME switch, then move rotary the shortest
+    path back to step 0 (modulo one revolution) and clear step counters.
+    """
+    key_ok = True
+    if config.get('key_catcher_enabled', True):
+        key_catcher_speed = config.get('key_catcher_speed', 80)
+        key_ok = hw.key_catcher_home(speed=key_catcher_speed, max_steps=8000)
+        if key_ok:
+            hw.key_catcher_reset_key_count()
+
+    rotary_ok = True
+    steps_before = hw.rotary_current_steps
+    step_delta = hw.shortest_step_delta_to_zero(steps_before)
+
+    if step_delta != 0:
+        rotary_ok = hw.move_steps(
+            step_delta,
+            speed=config['rotary_speed'],
+            accel_steps=config['rotary_accel_steps'],
+            decel_steps=config['rotary_decel_steps'],
+        )
+
+    if rotary_ok:
+        hw.reset_rotary_step_counter()
+        safe_update_app_state({
+            "current_angle": 0,
+            "is_homed": True,
+            "rotary_current_steps": 0,
+            "job_steps_used": 0,
+            "key_catcher_keys_since_reset": 0,
+            "key_catcher_position": 0,
+            "key_catcher_paused": False,
+        })
+        if step_delta == 0:
+            detail = "key catcher homed; rotary already at step 0"
+        else:
+            detail = (
+                f"key catcher homed; rotary moved {step_delta} steps "
+                f"({hw.steps_to_degrees(step_delta):.1f}°) from net {steps_before} to step 0"
+            )
+        log_step_event("FULL_RESET", steps=0, detail=detail)
+    elif key_ok:
+        safe_update_app_state({
+            "key_catcher_keys_since_reset": 0,
+            "key_catcher_position": 0,
+        })
+
+    return key_ok and rotary_ok
 
 # Initialize LightBurn controller
 lb_controller = None
@@ -550,6 +641,7 @@ def run_cycle_background(total_cycles):
             safe_set_app_state("key_catcher_keys_since_reset", 0)
         
         safe_set_app_state("system_message", "Start state complete. Beginning key detection cycle...")
+        safe_set_app_state("job_steps_used", 0)
 
         # --- UPDATED: Key-driven cycle loop ---
         cycle_step_degrees = apply_rotary_direction(abs(config['step_degrees']))
@@ -705,11 +797,9 @@ def run_cycle_background(total_cycles):
                 current_position += 1
                 next_angle = (current_position * config['step_degrees']) % 360
                 
-                move_success = hw.move_degrees(
+                move_success = rotary_move_degrees(
                     cycle_step_degrees,
-                    speed=config['rotary_speed'],
-                    accel_steps=config['rotary_accel_steps'],
-                    decel_steps=config['rotary_decel_steps']
+                    count_for_job=True,
                 )
                 if not move_success:
                     safe_update_app_state({
@@ -842,11 +932,9 @@ def run_cycle_background(total_cycles):
                 next_angle = (current_position * config['step_degrees']) % 360
                 
                 # Move rotary motor by step degrees to next position
-                move_success = hw.move_degrees(
+                move_success = rotary_move_degrees(
                     cycle_step_degrees,
-                    speed=config['rotary_speed'],
-                    accel_steps=config['rotary_accel_steps'],
-                    decel_steps=config['rotary_decel_steps']
+                    count_for_job=True,
                 )
                 if not move_success:
                     safe_update_app_state({
@@ -867,6 +955,7 @@ def run_cycle_background(total_cycles):
         print(f"📊 CYCLE STATISTICS")
         print(f"{'='*80}")
         print(f"Keys Processed: {keys_processed}/{total_cycles}")
+        print(f"Rotary Steps Used: {final_state.get('job_steps_used', 0)}")
         print(f"Total Cycle Time: {cycle_duration:.2f}s ({cycle_duration/60:.1f} minutes)")
         if keys_processed > 0:
             avg_per_key = cycle_duration / keys_processed
@@ -874,10 +963,11 @@ def run_cycle_background(total_cycles):
         print(f"{'='*80}\n")
         
         if final_state["is_running"]:
+            job_steps = final_state.get("job_steps_used", 0)
             if final_state["emergency_stop"]:
-                safe_set_app_state("system_message", f"🚨 EMERGENCY STOP! Cycle terminated. Processed {keys_processed} keys in {cycle_duration:.1f}s.")
+                safe_set_app_state("system_message", f"🚨 EMERGENCY STOP! Cycle terminated. Processed {keys_processed} keys in {cycle_duration:.1f}s. Rotary steps: {job_steps}.")
             elif final_state["stop_requested"]:
-                safe_set_app_state("system_message", f"Cycle stopped by user. Processed {keys_processed} keys in {cycle_duration:.1f}s. Ready.")
+                safe_set_app_state("system_message", f"Cycle stopped by user. Processed {keys_processed} keys in {cycle_duration:.1f}s. Rotary steps: {job_steps}. Ready.")
             else:
                 # All keys processed successfully - perform 2 additional step movements
                 safe_set_app_state("system_message", f"All {keys_processed} keys processed. Performing 2 additional steps...")
@@ -888,19 +978,18 @@ def run_cycle_background(total_cycles):
                     safe_set_app_state("system_message", f"Additional step {step} of 2 ({config['step_degrees']}°)...")
                     emit_status_update()
                     
-                    move_success = hw.move_degrees(
-                        cycle_step_degrees,  # One step movement
-                        speed=config['rotary_speed'],
-                        accel_steps=config['rotary_accel_steps'],
-                        decel_steps=config['rotary_decel_steps']
+                    move_success = rotary_move_degrees(
+                        cycle_step_degrees,
+                        count_for_job=True,
                     )
                     
                     if not move_success:
                         safe_set_app_state("system_message", f"⚠️ Warning: Additional step {step} failed. Cycle complete but extra steps incomplete.")
                         break
                 
-                safe_set_app_state("system_message", f"Cycle complete. Processed {keys_processed} keys in {cycle_duration:.1f}s. 2 additional steps complete. Ready.")
-                append_job_report(total_cycles, keys_processed, cycle_duration, completed=True)
+                final_job_steps = safe_get_app_state().get("job_steps_used", 0)
+                safe_set_app_state("system_message", f"Cycle complete. Processed {keys_processed} keys in {cycle_duration:.1f}s. Rotary steps used: {final_job_steps}. 2 additional steps complete. Ready.")
+                append_job_report(total_cycles, keys_processed, cycle_duration, completed=True, job_steps_used=final_job_steps)
             
         # Emit final status update BEFORE resetting the cycle counters
         emit_status_update()
@@ -947,11 +1036,8 @@ def home_machine():
         # Apply fine-tuned home offset from config if it exists
         if config.get("home_offset", 0.0) != 0.0:
             safe_set_app_state("system_message", f"Applying fine adjustment of {config['home_offset']:.1f}°...")
-            move_success = hw.move_degrees(
+            move_success = rotary_move_degrees(
                 apply_rotary_direction(config['home_offset']),
-                speed=config['rotary_speed'],
-                accel_steps=config['rotary_accel_steps'],
-                decel_steps=config['rotary_decel_steps']
             )
             if not move_success:
                 safe_update_app_state({
@@ -960,9 +1046,11 @@ def home_machine():
                 })
                 return jsonify({"success": False})
         
+        hw.reset_rotary_step_counter()
         safe_update_app_state({
             "is_homed": True,
             "current_angle": 0,
+            "rotary_current_steps": 0,
             "system_message": "Homing successful. Ready to start cycle."
         })
     else:
@@ -973,6 +1061,41 @@ def home_machine():
 
     safe_set_app_state("is_running", False)
     return jsonify({"success": success})
+
+@app.route('/api/full_reset', methods=['POST'])
+def api_full_reset():
+    """Home key catcher and rotary to calibrated step 0."""
+    current_state = safe_get_app_state()
+    if current_state["is_running"]:
+        return jsonify({"success": False, "message": "Cannot full reset while cycle is running."}), 400
+    if current_state["emergency_stop"]:
+        return jsonify({"success": False, "message": "Reset E-Stop before full reset."}), 400
+
+    safe_update_app_state({
+        "is_running": True,
+        "system_message": "Full reset in progress (key catcher HOME + rotary step 0)..."
+    })
+    emit_status_update()
+
+    try:
+        ok = perform_full_reset()
+        if ok:
+            safe_set_app_state("system_message", "Full reset complete. Key catcher at HOME, rotary at step 0.")
+        else:
+            safe_set_app_state("system_message", "Full reset failed. Check sensors, wiring, and homing.")
+        final_state = safe_get_app_state()
+        return jsonify({
+            "success": ok,
+            "message": final_state["system_message"],
+            "rotary_current_steps": final_state.get("rotary_current_steps", 0),
+            "job_steps_used": final_state.get("job_steps_used", 0),
+        })
+    except Exception as e:
+        safe_set_app_state("system_message", f"Full reset error: {str(e)}")
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        safe_set_app_state("is_running", False)
+        emit_status_update()
 
 # --- ADDED: Stop Cycle Route ---
 @app.route('/api/stop', methods=['POST'])
@@ -1163,6 +1286,7 @@ def start_cycle():
         "current_angle": 0,
         "current_cycle": 0,
         "total_cycles": total_cycles,
+        "job_steps_used": 0,
         "stop_requested": False,  # Reset stop flag
         "pause_requested": False,
         "is_paused": False
@@ -1219,9 +1343,13 @@ def api_rotary_home():
     
     ok = hw.home_table()
     
+    if ok:
+        hw.reset_rotary_step_counter()
+    
     safe_update_app_state({
         "is_homed": bool(ok),
         "current_angle": 0 if ok else current_state["current_angle"],
+        "rotary_current_steps": 0 if ok else hw.rotary_current_steps,
         "system_message": "Rotary homed" if ok else "Rotary homing failed",
         "is_running": False
     })
@@ -1246,11 +1374,8 @@ def api_rotary_move():
         "system_message": f"Moving {degrees}°..."
     })
     
-    ok = hw.move_degrees(
+    ok = rotary_move_degrees(
         apply_rotary_direction(degrees),
-        speed=config['rotary_speed'],
-        accel_steps=config['rotary_accel_steps'],
-        decel_steps=config['rotary_decel_steps']
     )
     
     if ok:
@@ -1325,20 +1450,30 @@ def api_rotary_set_zero():
     # Save the home offset to config.json so it persists
     config["home_offset"] = home_offset
     save_config(config)
+
+    hw.reset_rotary_step_counter()
+    log_step_event("STEP_ZERO_SET", steps=0, detail=f"home_offset={home_offset:.1f}°")
     
     if home_offset == 0.0:
-        system_message = "Current position set as 0° (no offset from hall sensor). Saved to config."
+        system_message = "Step 0 set and logged. Current position is 0° (no offset from hall sensor). Saved to config."
     else:
-        system_message = f"Current position set as 0°. Home offset: {home_offset:.1f}° from hall sensor. Saved to config."
+        system_message = f"Step 0 set and logged. Home offset: {home_offset:.1f}° from hall sensor. Saved to config."
     
     safe_update_app_state({
         "current_angle": 0,
+        "rotary_current_steps": 0,
         "is_homed": True,
         "system_message": system_message
     })
     
     final_state = safe_get_app_state()
-    return jsonify({"success": True, "message": final_state["system_message"], "current_angle": final_state["current_angle"], "home_offset": config["home_offset"]})
+    return jsonify({
+        "success": True,
+        "message": final_state["system_message"],
+        "current_angle": final_state["current_angle"],
+        "home_offset": config["home_offset"],
+        "rotary_current_steps": 0,
+    })
 
 # --- ADDED: Slider test cycle ---
 @app.route('/api/slider/test_cycle', methods=['POST'])

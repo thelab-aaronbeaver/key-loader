@@ -55,6 +55,9 @@ class HardwareController:
         self.key_catcher_current_position = 0  # Current position in steps
         self.key_catcher_keys_processed = 0     # Keys processed since last reset
 
+        # Rotary position tracking (steps from calibrated step 0 / Set Home reference)
+        self.rotary_current_steps = 0
+
         # --- MODIFIED: Motor Configuration for CL57T Driver (Rotary) ---
         # CL57T is configured for 3200 pulses per revolution (16x microstepping on 1.8° motor).
         # 200 full steps * 16 microsteps = 3200 pulses per revolution.
@@ -164,9 +167,89 @@ class HardwareController:
         self.enable_rotary_motor(False)
         return False
 
+    def degrees_to_steps(self, degrees):
+        """Convert degrees to integer motor pulses (always positive)."""
+        return int((abs(degrees) / 360.0) * self.PULSES_PER_REV)
+
+    def reset_rotary_step_counter(self):
+        """Reset rotary step position to calibrated step 0."""
+        self.rotary_current_steps = 0
+        print("Rotary step counter reset to 0")
+
+    def shortest_step_delta_to_zero(self, current_steps=None):
+        """
+        Signed step count for the shortest path back to step 0.
+        Uses modulo one revolution (e.g. 16640 net steps -> move -640, not -16640).
+        """
+        if current_steps is None:
+            current_steps = self.rotary_current_steps
+        if current_steps == 0:
+            return 0
+        rev = self.PULSES_PER_REV
+        pos = current_steps % rev
+        if pos > rev // 2:
+            pos -= rev
+        return -pos
+
+    def steps_to_degrees(self, steps):
+        """Convert signed step count to degrees (for logging/display)."""
+        return (float(steps) / self.PULSES_PER_REV) * 360.0
+
+    def move_steps(self, steps, speed=50, accel_steps=100, decel_steps=100):
+        """Move the rotary motor by an exact signed step count."""
+        if steps == 0:
+            return True
+
+        steps_to_move = abs(int(steps))
+        direction_sign = 1 if steps >= 0 else -1
+
+        self.enable_rotary_motor(True)
+        time.sleep(0.1)
+
+        if direction_sign >= 0:
+            GPIO.output(self.DIR_PIN, GPIO.HIGH)
+        else:
+            GPIO.output(self.DIR_PIN, GPIO.LOW)
+
+        base_delay = self._speed_to_delay(speed)
+        print(f"Moving {steps_to_move} steps ({'CW' if direction_sign >= 0 else 'CCW'}) at speed {speed}...")
+
+        accel_phase = min(accel_steps, steps_to_move // 2)
+        decel_phase = min(decel_steps, steps_to_move // 2)
+        cruise_phase = steps_to_move - accel_phase - decel_phase
+
+        try:
+            for i in range(accel_phase):
+                if GPIO.input(self.ALM_PIN) == GPIO.LOW:
+                    print("🛑 ERROR: Motor Stalled!")
+                    return False
+                delay = base_delay * (1.0 + (accel_phase - i) / accel_phase)
+                self._step_motor(delay)
+
+            for _ in range(cruise_phase):
+                if GPIO.input(self.ALM_PIN) == GPIO.LOW:
+                    print("🛑 ERROR: Motor Stalled!")
+                    return False
+                self._step_motor(base_delay)
+
+            for i in range(decel_phase):
+                if GPIO.input(self.ALM_PIN) == GPIO.LOW:
+                    print("🛑 ERROR: Motor Stalled!")
+                    return False
+                delay = base_delay * (1.0 + (i + 1) / decel_phase)
+                self._step_motor(delay)
+
+            self.rotary_current_steps += direction_sign * steps_to_move
+            return True
+
+        except Exception as e:
+            print(f"🛑 ERROR: Movement failed: {e}")
+            return False
+
     def move_degrees(self, degrees, speed=50, accel_steps=100, decel_steps=100):
         """Move the rotary motor by the given degrees with acceleration/deceleration."""
-        steps_to_move = int((abs(degrees) / 360.0) * self.PULSES_PER_REV)
+        steps_to_move = self.degrees_to_steps(degrees)
+        direction_sign = 1 if degrees >= 0 else -1
 
         # Enable motor before movement
         self.enable_rotary_motor(True)
@@ -217,6 +300,7 @@ class HardwareController:
                 delay = base_delay * (1.0 + (i + 1) / decel_phase)
                 self._step_motor(delay)
             
+            self.rotary_current_steps += direction_sign * steps_to_move
             return True
             
         except Exception as e:

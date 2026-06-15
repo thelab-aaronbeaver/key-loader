@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rotary Table Control</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="C:\Users\aaron\Documents\Github%20Projects\key-loader-1\static\style.css">
+
 </head>
 
 <body>
@@ -21,6 +23,11 @@
 
             <div class="button-group">
                 <button id="home-button">Home Machine</button>
+
+                <button id="btn-key-catcher-reset" class="btn-back">Reset Key Catch</button>
+
+                <button id="btn-full-reset" class="btn-back">Full Reset</button>
+
                 <p>Total Cycles (Keys to Process)</p>
                 <input id="cycles" type="number" min="1" value="10"
                     style="flex:0 0 100px; padding: 12px; border-radius: 5px; border: 1px solid #ccc;"
@@ -49,6 +56,12 @@
             <div class="row">
                 <div class="flex-container">
                     <div class="flex-item">Cycles Progress<span id="cycles-progress" class="status-value">0 of 0</span>
+                    </div>
+                    <div class="flex-item"><span class="divider"></span></div>
+                    <div class="flex-item">Rotary Step<span id="rotary-steps" class="status-value">0</span>
+                    </div>
+                    <div class="flex-item"><span class="divider"></span></div>
+                    <div class="flex-item">Job Steps<span id="job-steps" class="status-value">0</span>
                     </div>
                     <div class="flex-item"><span class="divider"></span></div>
                     <div class="flex-item">Home<span id="hall" class="indicator_config"></span></div>

@@ -24,6 +24,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const keyCatcherMaxIndicator = document.getElementById('key-catcher-max');
     const sliderStatusDisplay = document.getElementById('slider-status');
     const cyclesProgressDisplay = document.getElementById('cycles-progress');
+    const rotaryStepsDisplay = document.getElementById('rotary-steps');
+    const jobStepsDisplay = document.getElementById('job-steps');
+    const fullResetButton = document.getElementById('btn-full-reset');
+    const keyCatcherResetButton = document.getElementById('btn-key-catcher-reset');
     const currentPositionDisplay = document.getElementById('current-position'); // May not exist
 
     // Debug: Check if elements are found
@@ -35,6 +39,39 @@ document.addEventListener('DOMContentLoaded', function () {
         homeButton.addEventListener('click', () => {
             if (messageDisplay) messageDisplay.textContent = 'Homing sequence initiated...';
             fetch('/api/home', { method: 'POST' });
+        });
+    }
+
+    if (fullResetButton) {
+        fullResetButton.addEventListener('click', async () => {
+            if (!confirm('Full Reset will home the key catcher and move the rotary the shortest path back to step 0.\n\nContinue?')) {
+                return;
+            }
+            if (messageDisplay) messageDisplay.textContent = 'Full reset in progress...';
+            try {
+                const response = await fetch('/api/full_reset', { method: 'POST' });
+                const data = await response.json().catch(() => ({}));
+                if (messageDisplay) {
+                    messageDisplay.textContent = data.message || (response.ok ? 'Full reset complete' : 'Full reset failed');
+                }
+            } catch (e) {
+                if (messageDisplay) messageDisplay.textContent = 'Full reset error: ' + e.message;
+            }
+        });
+    }
+
+    if (keyCatcherResetButton) {
+        keyCatcherResetButton.addEventListener('click', async () => {
+            if (messageDisplay) messageDisplay.textContent = 'Resetting key catcher...';
+            try {
+                const response = await fetch('/api/key_catcher/reset', { method: 'POST' });
+                const data = await response.json().catch(() => ({}));
+                if (messageDisplay) {
+                    messageDisplay.textContent = data.message || (response.ok ? 'Key catcher reset' : 'Key catcher reset failed');
+                }
+            } catch (e) {
+                if (messageDisplay) messageDisplay.textContent = 'Key catcher reset error: ' + e.message;
+            }
         });
     }
 
@@ -232,6 +269,13 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log('cyclesProgressDisplay element not found!');
         }
 
+        if (rotaryStepsDisplay) {
+            rotaryStepsDisplay.textContent = String(data.rotary_current_steps ?? 0);
+        }
+        if (jobStepsDisplay) {
+            jobStepsDisplay.textContent = String(data.job_steps_used ?? 0);
+        }
+
         if (currentPositionDisplay) {
             if (data.total_cycles > 0) {
                 currentPositionDisplay.textContent = `Position ${data.current_cycle}`;
@@ -243,6 +287,8 @@ document.addEventListener('DOMContentLoaded', function () {
         // --- MODIFIED: Update button states and text ---
         const isBusy = data.is_running;
         if (homeButton) homeButton.disabled = isBusy;
+        if (fullResetButton) fullResetButton.disabled = isBusy || data.emergency_stop;
+        if (keyCatcherResetButton) keyCatcherResetButton.disabled = isBusy;
 
         // Update start/stop button based on emergency stop state
         if (startButton) {
