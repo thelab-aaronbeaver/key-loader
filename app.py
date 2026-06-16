@@ -3,7 +3,11 @@
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 from hardware_controller import HardwareController
-from lightburn_controller import LightBurnController
+try:
+    from lightburn_controller import LightBurnController
+except ImportError:
+    LightBurnController = None
+    print("⚠️  lightburn_controller.py not found — LightBurn automation disabled")
 import time
 import json
 import os
@@ -319,7 +323,7 @@ def perform_full_reset():
 
 # Initialize LightBurn controller
 lb_controller = None
-if config.get("lightburn_enabled", True):
+if config.get("lightburn_enabled", True) and LightBurnController is not None:
     try:
         lb_controller = LightBurnController(
             target_ip=config.get("lightburn_ip", "192.168.1.170"),
@@ -555,7 +559,7 @@ def api_set_config():
         
         # Reinitialize LightBurn controller if settings changed
         if any(key in data for key in ['lightburn_enabled', 'lightburn_ip', 'lightburn_out_port', 'lightburn_in_port', 'lightburn_timeout']):
-            if config.get("lightburn_enabled", True):
+            if config.get("lightburn_enabled", True) and LightBurnController is not None:
                 try:
                     lb_controller = LightBurnController(
                         target_ip=config.get("lightburn_ip", "192.168.1.170"),
