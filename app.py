@@ -147,6 +147,10 @@ def safe_update_app_state(updates):
     with app_state_lock:
         app_state.update(updates)
 
+def cooperative_sleep(seconds):
+    """Yield during waits so eventlet can serve WebSocket clients and /api/status."""
+    socketio.sleep(seconds)
+
 def emit_status_update():
     """Emit current status to all connected WebSocket clients."""
     try:
@@ -174,7 +178,7 @@ def emit_status_update():
         
         # Emit from app context so background threads (cycle, broadcast) can push to clients.
         with app.app_context():
-            socketio.emit('status_update', state_copy)
+            socketio.emit('status_update', state_copy, broadcast=True)
     except Exception as e:
         print(f"Error emitting status update: {e}")
 
@@ -693,7 +697,7 @@ def run_cycle_background(total_cycles):
                         emit_status_update()
                         print("▶️ Cycle resumed by user.")
                         break
-                    time.sleep(0.2)
+                    cooperative_sleep(0.2)
 
                 if current_state["emergency_stop"]:
                     safe_set_app_state("system_message", "🚨 EMERGENCY STOP ACTIVATED! Cycle terminated immediately.")
@@ -706,7 +710,7 @@ def run_cycle_background(total_cycles):
             # Wait a brief moment for rotary to settle and sensor to stabilize
             target_angle = (current_position * config['step_degrees']) % 360
             safe_set_app_state("system_message", f"Rotary at position {current_position} ({target_angle}°). Checking for key...")
-            time.sleep(0.1)  # Brief settle time for sensor to stabilize
+            cooperative_sleep(0.1)  # Brief settle time for sensor to stabilize
             emit_status_update()
             
             # Step 2: Check sensor AFTER rotary has positioned
@@ -790,7 +794,7 @@ def run_cycle_background(total_cycles):
                     remaining_pause = max(0, pause_time - slider_duration)
                     if remaining_pause > 0:
                         safe_set_app_state("system_message", f"Key {keys_processed} of {total_cycles}. Waiting remaining {remaining_pause:.1f}s...")
-                        time.sleep(remaining_pause)
+                        cooperative_sleep(remaining_pause)
                     lightburn_duration = lightburn_start_time + pause_time - lightburn_start_time
                     print(f"⏱️  Total pause time: {pause_time:.2f}s (slider: {slider_duration:.2f}s parallel)")
                 
@@ -870,7 +874,7 @@ def run_cycle_background(total_cycles):
                                 if not current_state["key_catcher_paused"]:
                                     break
                                 
-                                time.sleep(0.5)  # Check every 500ms
+                                cooperative_sleep(0.5)  # Check every 500ms
                             
                             # Pause released - resume cycle
                             print("Cycle resuming after key removal pause")
@@ -1296,11 +1300,8 @@ def start_cycle():
         "is_paused": False
     })
 
-    # Start the cycle in a background thread
-    safe_set_app_state("cycle_thread", threading.Thread(target=run_cycle_background, args=(total_cycles,)))
-    current_state = safe_get_app_state()
-    current_state["cycle_thread"].daemon = True  # Thread will die when main process dies
-    current_state["cycle_thread"].start()
+    # Run cycle as eventlet greenlet (not threading.Thread) so UI broadcasts stay live
+    socketio.start_background_task(run_cycle_background, total_cycles)
     
     # Emit initial status update
     emit_status_update()

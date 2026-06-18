@@ -181,13 +181,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // HTTP polling fallback when WebSocket is down (keeps UI live on Pi/eventlet hiccups)
+    // HTTP polling keeps UI live during long motor moves (WebSocket alone can lag on Pi/eventlet)
+    const STATUS_POLL_MS_IDLE = 500;
+    const STATUS_POLL_MS_RUNNING = 250;
     let statusPollInterval = null;
-
-    function startStatusPolling() {
-        if (statusPollInterval) return;
-        statusPollInterval = setInterval(refreshStatusFallback, 1000);
-    }
+    let lastRunning = false;
 
     function stopStatusPolling() {
         if (statusPollInterval) {
@@ -196,18 +194,35 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function startStatusPolling(intervalMs) {
+        stopStatusPolling();
+        statusPollInterval = setInterval(refreshStatusFallback, intervalMs);
+    }
+
+    function syncPollRate(isRunning) {
+        const ms = isRunning ? STATUS_POLL_MS_RUNNING : STATUS_POLL_MS_IDLE;
+        if (!statusPollInterval) {
+            startStatusPolling(ms);
+            return;
+        }
+        if (isRunning !== lastRunning) {
+            startStatusPolling(ms);
+        }
+    }
+
     // WebSocket event handlers (only if socket is available)
     if (socket) {
         socket.on('connect', function () {
             console.log('Connected to server via WebSocket');
-            stopStatusPolling();
+            refreshStatusFallback();
+            startStatusPolling(STATUS_POLL_MS_IDLE);
             socket.emit('request_status');
         });
 
         socket.on('disconnect', function () {
             console.log('Disconnected from server');
-            if (messageDisplay) messageDisplay.textContent = 'Connection lost. Attempting to reconnect...';
-            startStatusPolling();
+            if (messageDisplay) messageDisplay.textContent = 'Connection lost. Reconnecting...';
+            startStatusPolling(STATUS_POLL_MS_IDLE);
         });
 
         socket.on('status_update', function (data) {
@@ -216,7 +231,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function updateUI(data) {
-        console.log('updateUI called with data:', data);
         if (messageDisplay) messageDisplay.textContent = data.system_message;
 
         // --- MODIFIED: Update homing status display (only if element exists) ---
@@ -233,40 +247,30 @@ document.addEventListener('DOMContentLoaded', function () {
         // Update sensor indicators
         if (hallIndicator) {
             hallIndicator.classList.toggle('active', data.hall_status);
-            console.log('Hall sensor:', data.hall_status ? 'ACTIVE' : 'INACTIVE');
         }
         if (inductiveIndicator) {
             inductiveIndicator.classList.toggle('active', data.inductive_status);
-            console.log('Inductive sensor:', data.inductive_status ? 'ACTIVE' : 'INACTIVE');
         }
         if (sliderMinIndicator) {
             sliderMinIndicator.classList.toggle('active', data.slider_min);
-            console.log('Slider MIN:', data.slider_min ? 'ACTIVE' : 'INACTIVE');
         }
         if (sliderMaxIndicator) {
             sliderMaxIndicator.classList.toggle('active', data.slider_max);
-            console.log('Slider MAX:', data.slider_max ? 'ACTIVE' : 'INACTIVE');
         }
         if (keyCatcherHomeIndicator) {
             keyCatcherHomeIndicator.classList.toggle('active', data.key_catcher_home);
-            console.log('Key Catcher HOME:', data.key_catcher_home ? 'ACTIVE' : 'INACTIVE');
         }
         if (keyCatcherMaxIndicator) {
             keyCatcherMaxIndicator.classList.toggle('active', data.key_catcher_max);
-            console.log('Key Catcher MAX:', data.key_catcher_max ? 'ACTIVE' : 'INACTIVE');
         }
 
         // --- ADDED: Update cycle progress display ---
         if (cyclesProgressDisplay) {
-            console.log('Updating cycles progress:', data.current_cycle, 'of', data.total_cycles);
-            console.log('Full data object:', data);
             if (data.total_cycles > 0) {
                 cyclesProgressDisplay.textContent = `${data.current_cycle} of ${data.total_cycles}`;
             } else {
                 cyclesProgressDisplay.textContent = '0 of 0';
             }
-        } else {
-            console.log('cyclesProgressDisplay element not found!');
         }
 
         if (rotaryStepsDisplay) {
@@ -341,6 +345,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 emergencyStopButton.className = 'btn-emergency-stop';
             }
         }
+
+        syncPollRate(!!data.is_running);
+        lastRunning = !!data.is_running;
     }
 
     // Fallback function for when WebSocket is not available
@@ -369,12 +376,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Initialize: Load config first
+    // Initialize: load config and start status polling (WebSocket + HTTP backup)
     loadConfig();
-
-    if (!socket) {
-        console.log('WebSocket not available, using polling fallback');
-        refreshStatusFallback();
-        startStatusPolling();
-    }
+    refreshStatusFallback();
+    startStatusPolling(STATUS_POLL_MS_IDLE);
 });
