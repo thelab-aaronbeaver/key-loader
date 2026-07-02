@@ -56,13 +56,19 @@ app_state = {
     "key_catcher_keys_since_reset": 0,
     # Rotary step tracking (from Set Home / calibrated step 0)
     "rotary_current_steps": 0,
-    "job_steps_used": 0
+    "job_steps_used": 0,
+    # Required job setup fields
+    "active_keyway": "",
+    "active_pin_count": None,
+    "active_starting_number": None,
+    "current_key_number": None
 }
 
 # --- ADDED: Runtime configuration with JSON persistence ---
 CONFIG_FILE = "config.json"
 JOB_REPORT_FILE = "job_reports.txt"
 STEP_LOG_FILE = "step_log.txt"
+KEYWAY_FILE = "keyway.json"
 KEY_CATCHER_MM_PER_100_STEPS = 3.75
 KEY_CATCHER_MM_PER_STEP = KEY_CATCHER_MM_PER_100_STEPS / 100.0
 KEY_CATCHER_STEPS_PER_MM = 1.0 / KEY_CATCHER_MM_PER_STEP
@@ -192,16 +198,62 @@ def save_config(config_dict):
         print(f"Error saving config: {e}")
         return False
 
-def append_job_report(total_cycles, keys_processed, cycle_duration, completed=True, job_steps_used=0):
+def load_keyway_names():
+    """Load keyway names from keyway.json as a list of non-empty strings."""
+    if not os.path.exists(KEYWAY_FILE):
+        raise FileNotFoundError(f"{KEYWAY_FILE} not found")
+
+    with open(KEYWAY_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if not isinstance(data, list):
+        raise ValueError(f"{KEYWAY_FILE} must be a JSON array")
+
+    keyways = []
+    for item in data:
+        if not isinstance(item, str):
+            raise ValueError(f"{KEYWAY_FILE} must contain only strings")
+        name = item.strip()
+        if name:
+            keyways.append(name)
+
+    if not keyways:
+        raise ValueError(f"{KEYWAY_FILE} does not contain any keyway names")
+
+    return keyways
+
+def append_job_report(
+    total_cycles,
+    keys_processed,
+    cycle_duration,
+    completed=True,
+    job_steps_used=0,
+    keyway="",
+    pin_count=None,
+    starting_number=None,
+    processed_key_numbers=None,
+):
     """Append a completed job report entry to a text file."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     avg_per_key = (cycle_duration / keys_processed) if keys_processed > 0 else 0.0
     status = "COMPLETED" if completed else "NOT_COMPLETED"
+    processed_key_numbers = processed_key_numbers or []
+
+    if processed_key_numbers:
+        key_range = f"{processed_key_numbers[0]} to {processed_key_numbers[-1]}"
+    elif starting_number is not None and keys_processed > 0:
+        key_range = f"{starting_number} to {starting_number + keys_processed - 1}"
+    else:
+        key_range = "N/A"
 
     report_lines = [
         "=" * 72,
         f"Job Timestamp: {timestamp}",
         f"Status: {status}",
+        f"Keyway: {keyway or 'N/A'}",
+        f"Pin Count: {pin_count if pin_count is not None else 'N/A'}",
+        f"Starting Number: {starting_number if starting_number is not None else 'N/A'}",
+        f"Processed Number Range: {key_range}",
         f"Requested Keys: {total_cycles}",
         f"Processed Keys: {keys_processed}",
         f"Rotary Steps Used: {job_steps_used}",
@@ -211,8 +263,13 @@ def append_job_report(total_cycles, keys_processed, cycle_duration, completed=Tr
         f"Rotary Speed: {config.get('rotary_speed')}",
         f"Slider In/Out Speed: {config.get('slider_in_speed')}/{config.get('slider_out_speed')}",
         f"Key Catcher Enabled: {config.get('key_catcher_enabled')}",
-        "",
+        "Processed Key Numbers:",
     ]
+    if processed_key_numbers:
+        report_lines.extend([f"  - {number}" for number in processed_key_numbers])
+    else:
+        report_lines.append("  - none")
+    report_lines.append("")
 
     try:
         with open(JOB_REPORT_FILE, "a", encoding="utf-8") as f:
@@ -469,6 +526,19 @@ def trigger_lightburn_job():
 def index():
     return render_template('index.html')
 
+@app.route('/api/keyways', methods=['GET'])
+def api_get_keyways():
+    """Return keyway names loaded from keyway.json."""
+    try:
+        keyways = load_keyway_names()
+        return jsonify({"success": True, "keyways": keyways})
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Failed to load keyways: {str(e)}",
+            "keyways": []
+        }), 500
+
 # --- ADDED: Configuration Page ---
 @app.route('/config')
 def config_page():
@@ -655,6 +725,11 @@ def run_cycle_background(total_cycles):
         cycle_step_degrees = apply_rotary_direction(abs(config['step_degrees']))
         keys_processed = 0
         current_position = 0
+        start_state = safe_get_app_state()
+        selected_keyway = start_state.get("active_keyway", "")
+        selected_pin_count = start_state.get("active_pin_count")
+        starting_number = start_state.get("active_starting_number")
+        processed_key_numbers = []
         
         # Get initial state safely
         current_state = safe_get_app_state()
@@ -718,6 +793,10 @@ def run_cycle_background(total_cycles):
                 # Key detected - process it
                 key_start_time = time.time()
                 keys_processed += 1
+                key_number = (starting_number + keys_processed - 1) if starting_number is not None else None
+                if key_number is not None:
+                    processed_key_numbers.append(key_number)
+                    safe_set_app_state("current_key_number", key_number)
                 safe_set_app_state("current_cycle", keys_processed)  # Update UI with keys processed count
                 safe_set_app_state("system_message", f"✅ Key detected at position {current_position} ({target_angle}°). Processing key {keys_processed} of {total_cycles}...")
                 emit_status_update()
@@ -997,7 +1076,17 @@ def run_cycle_background(total_cycles):
                 
                 final_job_steps = safe_get_app_state().get("job_steps_used", 0)
                 safe_set_app_state("system_message", f"Cycle complete. Processed {keys_processed} keys in {cycle_duration:.1f}s. Rotary steps used: {final_job_steps}. 2 additional steps complete. Ready.")
-                append_job_report(total_cycles, keys_processed, cycle_duration, completed=True, job_steps_used=final_job_steps)
+                append_job_report(
+                    total_cycles,
+                    keys_processed,
+                    cycle_duration,
+                    completed=True,
+                    job_steps_used=final_job_steps,
+                    keyway=selected_keyway,
+                    pin_count=selected_pin_count,
+                    starting_number=starting_number,
+                    processed_key_numbers=processed_key_numbers,
+                )
             
         # Emit final status update BEFORE resetting the cycle counters
         emit_status_update()
@@ -1008,6 +1097,7 @@ def run_cycle_background(total_cycles):
             "is_paused": False,
             "current_cycle": 0,
             "total_cycles": 0,
+            "current_key_number": None,
             "cycle_thread": None
         })
         
@@ -1021,6 +1111,7 @@ def run_cycle_background(total_cycles):
             "is_running": False,
             "current_cycle": 0,
             "total_cycles": 0,
+            "current_key_number": None,
             "stop_requested": False,
             "cycle_thread": None
         })
@@ -1281,6 +1372,28 @@ def start_cycle():
         except (ValueError, TypeError):
             print("ERROR: Invalid cycles parameter")
             return jsonify({"error": "Invalid cycles parameter. Must be a positive integer."}), 400
+
+        keyway = str(data.get("keyway", "")).strip()
+        if not keyway:
+            return jsonify({"error": "Keyway is required."}), 400
+
+        valid_keyways = load_keyway_names()
+        if keyway not in valid_keyways:
+            return jsonify({"error": "Invalid keyway selection."}), 400
+
+        try:
+            pin_count = int(data.get("pin_count"))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Pin count is required and must be 6 or 7."}), 400
+        if pin_count not in (6, 7):
+            return jsonify({"error": "Pin count must be 6 or 7."}), 400
+
+        try:
+            starting_number = int(data.get("starting_number"))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Starting number is required and must be a positive integer."}), 400
+        if starting_number <= 0:
+            return jsonify({"error": "Starting number must be a positive integer."}), 400
             
         print(f"Total cycles to run: {total_cycles}")
         
@@ -1295,6 +1408,10 @@ def start_cycle():
         "current_cycle": 0,
         "total_cycles": total_cycles,
         "job_steps_used": 0,
+        "active_keyway": keyway,
+        "active_pin_count": pin_count,
+        "active_starting_number": starting_number,
+        "current_key_number": starting_number,
         "stop_requested": False,  # Reset stop flag
         "pause_requested": False,
         "is_paused": False

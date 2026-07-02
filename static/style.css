@@ -1,5 +1,5 @@
 :root {
-    --bg-color: #1f3535;
+    --bg-color: #122d55;
     --panel-color: #fbfbf4;
     --border-color: #444c56;
     --text-color: #c5c8c6;
@@ -90,7 +90,7 @@ h2 {
 }
 
 .indicator_config {
-    width: 80px;
+    width: 40px;
     height: 20px;
     border-radius: 10px;
     background-color: var(--border-color);
@@ -125,12 +125,39 @@ h2 {
     font-family: monospace;
     overflow-y: auto;
     width: 100%;
+    font-size: 14px;
 }
 
 .button-group {
     display: flex;
     gap: 10px;
-    margin-top: 20px;
+    margin: 20px 0;
+    flex-wrap: nowrap;
+    justify-content: center;
+    align-items: center;
+    flex-direction: row;
+}
+
+.job-setup-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.job-setup-inline label {
+    min-width: auto;
+    font-size: 14px;
+}
+
+.job-setup-inline select,
+.job-setup-inline input[type="number"] {
+    min-width: 130px;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--panel-color);
+    color: #333;
+    font-size: 14px;
 }
 
 button {

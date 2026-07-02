@@ -5,8 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rotary Table Control</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="C:\Users\aaron\Documents\Github%20Projects\key-loader-1\static\style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
 </head>
 
@@ -19,6 +18,46 @@
             </div>
         </div>
         <div class="card">
+            <h2>Job Setup</h2>
+            <div class="button-group">
+                <p>Keys to Process</p>
+                <input id="cycles" type="number" min="1" value="10"
+                    style="flex:0 0 100px; padding: 12px; border-radius: 5px; border: 1px solid #ccc;"
+                    placeholder="Cycles" title="Loaded from configuration">
+
+                <div class="job-setup-inline">
+                    <label for="keyway">Keyway</label>
+                    <select id="keyway" required>
+                        <option value="">Select keyway...</option>
+                    </select>
+                </div>
+
+                <div class="job-setup-inline">
+                    <label for="pin-count">Pin Count</label>
+                    <select id="pin-count" required>
+                        <option value="">Select pin count...</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                    </select>
+                </div>
+
+                <div class="job-setup-inline">
+                    <label for="starting-number">Starting Number</label>
+                    <input id="starting-number" type="number" min="1" step="1" required placeholder="e.g. 1000">
+                </div>
+
+            </div>
+            <div class="button-group">
+                <button id="start-button">Start Cycle</button>
+                <button id="pause-button" style="display: none;">Pause Cycle</button>
+                <button id="resume-button" style="display: none;">Resume Cycle</button>
+            </div>
+            <div class="button-group">
+                <div class="emergency-stop-section">
+                    <button id="emergency-stop-button" class="btn-emergency-stop">E-STOP</button>
+                    <div class="emergency-stop-info">Emergency Stop - Immediately halts all motion</div>
+                </div>
+            </div>
             <h2>Process Control</h2>
 
             <div class="button-group">
@@ -28,21 +67,12 @@
 
                 <button id="btn-full-reset" class="btn-back">Full Reset</button>
 
-                <p>Total Cycles (Keys to Process)</p>
-                <input id="cycles" type="number" min="1" value="10"
-                    style="flex:0 0 100px; padding: 12px; border-radius: 5px; border: 1px solid #ccc;"
-                    placeholder="Cycles" title="Loaded from configuration">
-                <button id="start-button">Start Cycle</button>
-                <button id="pause-button" style="display: none;">Pause Cycle</button>
-                <button id="resume-button" style="display: none;">Resume Cycle</button>
+
+
+
             </div>
             <div class="row">
-                <div class="flex-item">
-                    <div class="emergency-stop-section">
-                        <button id="emergency-stop-button" class="btn-emergency-stop">E-STOP</button>
-                        <div class="emergency-stop-info">Emergency Stop - Immediately halts all motion</div>
-                    </div>
-                </div>
+
 
                 <div class="flex-item">
                     <h2>System</h2>
@@ -56,6 +86,9 @@
             <div class="row">
                 <div class="flex-container">
                     <div class="flex-item">Cycles Progress<span id="cycles-progress" class="status-value">0 of 0</span>
+                    </div>
+                    <div class="flex-item"><span class="divider"></span></div>
+                    <div class="flex-item">Current Key Number<span id="current-key-number" class="status-value">-</span>
                     </div>
                     <div class="flex-item"><span class="divider"></span></div>
                     <div class="flex-item">Rotary Step<span id="rotary-steps" class="status-value">0</span>
@@ -83,7 +116,9 @@
         </div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
-    <script src="/static/script.js?v=2"></script>
+    <script src="{{ url_for('static', filename='script.js') }}?v=2"></script>
+    <script src="C:\Users\aaron\Documents\Github%20Projects\key-loader-1\static\script.js?v=2"></script>
+
 </body>
 
 </html>
