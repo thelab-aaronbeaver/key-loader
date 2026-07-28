@@ -17,9 +17,9 @@ from datetime import datetime
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'key_loader_secret_key_2024'
-# eventlet is the default async driver when installed; status broadcasts must use
-# socketio.start_background_task + socketio.sleep (not threading.Thread + time.sleep).
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+# Threading mode is more reliable for this app's blocking GPIO/UDP workloads.
+# Eventlet can stall UI updates when long hardware operations are running.
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 hw = HardwareController()
 
 # --- ADDED: Thread Safety Lock ---
@@ -1946,6 +1946,8 @@ def api_lightburn_start():
 
 
 _status_broadcast_started = False
+# Backward-compat alias: older code paths may reference this name.
+status_broadcast_thread = None
 
 def status_broadcast_loop():
     """Cooperative background loop for live sensor/UI updates (eventlet-safe)."""
@@ -1960,10 +1962,10 @@ def status_broadcast_loop():
 
 def ensure_status_broadcast():
     """Start the broadcast loop once per server process."""
-    global _status_broadcast_started
+    global _status_broadcast_started, status_broadcast_thread
     if not _status_broadcast_started:
         _status_broadcast_started = True
-        socketio.start_background_task(status_broadcast_loop)
+        status_broadcast_thread = socketio.start_background_task(status_broadcast_loop)
 
 if __name__ == '__main__':
     try:
