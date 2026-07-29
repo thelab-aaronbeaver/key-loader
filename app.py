@@ -61,7 +61,8 @@ app_state = {
     "active_keyway": "",
     "active_pin_count": None,
     "active_starting_number": None,
-    "current_key_number": None
+    "current_key_number": None,
+    "next_starting_number": None
 }
 
 # --- ADDED: Runtime configuration with JSON persistence ---
@@ -184,7 +185,7 @@ def emit_status_update():
         
         # Emit from app context so background threads (cycle, broadcast) can push to clients.
         with app.app_context():
-            socketio.emit('status_update', state_copy, broadcast=True)
+            socketio.emit('status_update', state_copy)
     except Exception as e:
         print(f"Error emitting status update: {e}")
 
@@ -730,6 +731,7 @@ def run_cycle_background(total_cycles):
         selected_pin_count = start_state.get("active_pin_count")
         starting_number = start_state.get("active_starting_number")
         processed_key_numbers = []
+        next_starting_number = starting_number
         
         # Get initial state safely
         current_state = safe_get_app_state()
@@ -797,6 +799,7 @@ def run_cycle_background(total_cycles):
                 if key_number is not None:
                     processed_key_numbers.append(key_number)
                     safe_set_app_state("current_key_number", key_number)
+                    next_starting_number = key_number + 1
                 safe_set_app_state("current_cycle", keys_processed)  # Update UI with keys processed count
                 safe_set_app_state("system_message", f"✅ Key detected at position {current_position} ({target_angle}°). Processing key {keys_processed} of {total_cycles}...")
                 emit_status_update()
@@ -1087,6 +1090,9 @@ def run_cycle_background(total_cycles):
                     starting_number=starting_number,
                     processed_key_numbers=processed_key_numbers,
                 )
+
+        # Keep next starting number available to UI for the next run.
+        safe_set_app_state("next_starting_number", next_starting_number)
             
         # Emit final status update BEFORE resetting the cycle counters
         emit_status_update()
@@ -1412,6 +1418,7 @@ def start_cycle():
         "active_pin_count": pin_count,
         "active_starting_number": starting_number,
         "current_key_number": starting_number,
+        "next_starting_number": starting_number,
         "stop_requested": False,  # Reset stop flag
         "pause_requested": False,
         "is_paused": False
@@ -1946,8 +1953,6 @@ def api_lightburn_start():
 
 
 _status_broadcast_started = False
-# Backward-compat alias: older code paths may reference this name.
-status_broadcast_thread = None
 
 def status_broadcast_loop():
     """Cooperative background loop for live sensor/UI updates (eventlet-safe)."""
@@ -1962,10 +1967,10 @@ def status_broadcast_loop():
 
 def ensure_status_broadcast():
     """Start the broadcast loop once per server process."""
-    global _status_broadcast_started, status_broadcast_thread
+    global _status_broadcast_started
     if not _status_broadcast_started:
         _status_broadcast_started = True
-        status_broadcast_thread = socketio.start_background_task(status_broadcast_loop)
+        socketio.start_background_task(status_broadcast_loop)
 
 if __name__ == '__main__':
     try:
@@ -1974,7 +1979,7 @@ if __name__ == '__main__':
         # Flask debug reloader spawns a second process; importing this module again
         # constructs a second HardwareController() and re-initializes GPIO — unreliable on Pi.
         # Set FLASK_USE_RELOADER=1 if you need auto-reload during development.
-        debug = os.environ.get("FLASK_DEBUG", "1") not in ("0", "false", "False")
+        debug = os.environ.get("FLASK_DEBUG", "0") not in ("0", "false", "False")
         use_reloader = os.environ.get("FLASK_USE_RELOADER", "0") in ("1", "true", "True")
 
         socketio.run(

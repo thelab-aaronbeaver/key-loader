@@ -48,12 +48,14 @@ class LightBurnController:
             print(f"❌ Failed to create socket: {e}")
             return False
     
-    def _send_command(self, command):
+    def _send_command(self, command, log_io=True, log_timeout=True):
         """
         Send a command to LightBurn and wait for response.
         
         Args:
             command: Command string to send
+            log_io: If True, log send/response lines
+            log_timeout: If True, log socket timeout lines
             
         Returns:
             Response string or None if failed
@@ -65,16 +67,19 @@ class LightBurnController:
             
             # Send command
             self.sock.sendto(command.encode('utf-8'), (self.target_ip, self.out_port))
-            print(f"📡 Sent to LightBurn ({self.target_ip}:{self.out_port}): {command}")
+            if log_io:
+                print(f"📡 Sent to LightBurn ({self.target_ip}:{self.out_port}): {command}")
             
             # Wait for response
             try:
                 data, addr = self.sock.recvfrom(1024)
                 response = data.decode('utf-8')
-                print(f"📥 Response from LightBurn: {response}")
+                if log_io:
+                    print(f"📥 Response from LightBurn: {response}")
                 return response
             except socket.timeout:
-                print(f"⏱️  No response from LightBurn (timeout: {self.timeout}s)")
+                if log_timeout:
+                    print(f"⏱️  No response from LightBurn (timeout: {self.timeout}s)")
                 return None
                 
         except Exception as e:
@@ -105,15 +110,18 @@ class LightBurnController:
         response = self._send_command("START")
         return response is not None
     
-    def get_status(self):
+    def get_status(self, quiet=False):
         """
         Get current status from LightBurn.
         
+        Args:
+            quiet: If True, suppress per-poll STATUS send/timeout logs
+
         Returns:
             Dictionary with status information or None if failed
             Example: {"status": "idle"} or {"status": "running"}
         """
-        response = self._send_command("STATUS")
+        response = self._send_command("STATUS", log_io=not quiet, log_timeout=not quiet)
         if response:
             try:
                 # Try to parse as JSON if LightBurn returns structured data
@@ -123,10 +131,14 @@ class LightBurnController:
                 return {"raw_response": response, "status": response.lower()}
         return None
     
-    def is_busy(self):
+    def is_busy(self, status=None, quiet=False):
         """
         Check if LightBurn is currently running a job.
         
+        Args:
+            status: Optional status object from get_status() to avoid duplicate polling
+            quiet: If True, suppress "unable to determine" logging
+
         Returns:
             True if busy, False if idle, None if unable to determine
         
@@ -134,7 +146,8 @@ class LightBurnController:
         - Idle/Ready: "OK" or "ok"
         - Job Running: "!" 
         """
-        status = self.get_status()
+        if status is None:
+            status = self.get_status(quiet=quiet)
         if status is None:
             return None
         
@@ -163,7 +176,8 @@ class LightBurnController:
                 return False
         
         # Unable to determine
-        print(f"⚠️  Unable to determine LightBurn status from: {status}")
+        if not quiet:
+            print(f"⚠️  Unable to determine LightBurn status from: {status}")
         return None
     
     def wait_for_completion(self, poll_interval=0.1, max_wait=300):
@@ -186,6 +200,7 @@ class LightBurnController:
         
         last_log_time = start_time
         log_interval = 2.0  # Log status every 2 seconds to reduce console spam
+        consecutive_failures = 0
         
         while True:
             elapsed = time.time() - start_time
@@ -196,16 +211,21 @@ class LightBurnController:
                 return False
             
             # Check status
-            status = self.get_status()
-            is_busy = self.is_busy()
+            status = self.get_status(quiet=True)
+            is_busy = self.is_busy(status=status, quiet=True)
             
             if is_busy is None:
                 # Unable to get status - LightBurn might be offline
+                consecutive_failures += 1
                 if time.time() - last_log_time >= log_interval:
-                    print(f"⚠️  Unable to get LightBurn status (elapsed: {elapsed:.1f}s)")
+                    print(
+                        f"⚠️  LightBurn status unavailable "
+                        f"(elapsed: {elapsed:.1f}s, consecutive_failures: {consecutive_failures})"
+                    )
                     last_log_time = time.time()
                 time.sleep(poll_interval)
                 continue
+            consecutive_failures = 0
             
             if not is_busy:
                 # Job complete - status should be "OK" or "ok"

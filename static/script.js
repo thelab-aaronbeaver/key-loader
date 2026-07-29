@@ -257,6 +257,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function updateUI(data) {
+        const justFinishedCycle = lastRunning && !data.is_running;
         if (messageDisplay) messageDisplay.textContent = data.system_message;
 
         // --- MODIFIED: Update homing status display (only if element exists) ---
@@ -303,6 +304,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 currentKeyNumberDisplay.textContent = String(data.current_key_number);
             } else {
                 currentKeyNumberDisplay.textContent = '-';
+            }
+        }
+        if (justFinishedCycle && startingNumberInput) {
+            const nextStarting = Number(data.next_starting_number);
+            if (Number.isInteger(nextStarting) && nextStarting > 0) {
+                startingNumberInput.value = String(nextStarting);
             }
         }
 
