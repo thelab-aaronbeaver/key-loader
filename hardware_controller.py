@@ -64,6 +64,8 @@ class HardwareController:
         # This matches the CL57T DIP switch settings for 16x microstepping.
         self.PULSES_PER_REV = 3200
         self.SPEED_DELAY = 0.0002 # CL57T can handle faster speeds than basic drivers
+        # Give driver time to latch DIR before first STEP pulse.
+        self.DIR_SETUP_DELAY = 0.002
 
         # --- Setup GPIO ---
         GPIO.setmode(GPIO.BCM)
@@ -148,6 +150,7 @@ class HardwareController:
         
         # Set direction for homing (e.g., counter-clockwise)
         GPIO.output(self.DIR_PIN, GPIO.LOW)
+        time.sleep(self.DIR_SETUP_DELAY)
 
         # Rotate until hall is triggered (active low). Limit to ~1.5 revs to avoid loops
         max_steps = int(self.PULSES_PER_REV * 1.5)
@@ -210,6 +213,9 @@ class HardwareController:
             GPIO.output(self.DIR_PIN, GPIO.HIGH)
         else:
             GPIO.output(self.DIR_PIN, GPIO.LOW)
+        time.sleep(self.DIR_SETUP_DELAY)
+        dir_read = int(GPIO.input(self.DIR_PIN))
+        print(f"DIR set to {'HIGH' if dir_read else 'LOW'} for {'CW' if direction_sign >= 0 else 'CCW'}")
 
         base_delay = self._speed_to_delay(speed)
         print(f"Moving {steps_to_move} steps ({'CW' if direction_sign >= 0 else 'CCW'}) at speed {speed}...")
@@ -260,6 +266,9 @@ class HardwareController:
             GPIO.output(self.DIR_PIN, GPIO.HIGH)
         else:
             GPIO.output(self.DIR_PIN, GPIO.LOW)
+        time.sleep(self.DIR_SETUP_DELAY)
+        dir_read = int(GPIO.input(self.DIR_PIN))
+        print(f"DIR set to {'HIGH' if dir_read else 'LOW'} for {'CW' if degrees >= 0 else 'CCW'}")
 
         # Convert speed (0-100) to delay
         base_delay = self._speed_to_delay(speed)
