@@ -8,7 +8,8 @@ class HardwareController:
         # --- Pin Configuration (BCM numbering) ---
         # Rotary Motor (OMC Closed-Loop Stepper)
         self.STEP_PIN = 20
-        self.DIR_PIN = 21
+        # DIAGNOSTIC: moved DIR off GPIO21 to test for bad GPIO pin.
+        self.DIR_PIN = 22
         self.ENABLE_PIN = 12  # Enable pin for rotary motor
         self.ALM_PIN = 16
         
